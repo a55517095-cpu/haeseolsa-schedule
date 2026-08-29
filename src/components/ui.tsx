@@ -60,22 +60,3 @@ export function MonthPicker({
   )
 }
 
-/** 조 선택 (1조 / 2조) */
-export function TeamTabs({
-  teams, value, onChange,
-}: { teams: { id: number; name: string }[]; value: number; onChange: (id: number) => void }) {
-  return (
-    <div className="tabs" role="tablist">
-      {teams.map((t) => (
-        <button
-          key={t.id}
-          role="tab"
-          aria-selected={value === t.id}
-          onClick={() => onChange(t.id)}
-        >
-          {t.name}
-        </button>
-      ))}
-    </div>
-  )
-}

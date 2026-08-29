@@ -6,20 +6,12 @@
 
 -- --- 1. 테이블 --------------------------------------------------------------
 
--- 조 (1조 / 2조)
-create table if not exists public.teams (
-  id   int  primary key,
-  name text not null
-);
-
 -- 근무지 (시공원, 기당미술관, 소암기념관 ...)
 create table if not exists public.posts (
   id         uuid primary key default gen_random_uuid(),
-  team_id    int  not null references public.teams(id) on delete cascade,
-  name       text not null,
+  name       text not null unique,
   sort_order int  not null default 0,
-  active     boolean not null default true,
-  unique (team_id, name)
+  active     boolean not null default true
 );
 
 -- 해설사
@@ -28,7 +20,6 @@ create table if not exists public.members (
   auth_user_id uuid unique references auth.users(id) on delete set null,
   login_code   text unique not null,           -- 로그인 계정 식별자 (영문/숫자)
   name         text not null,
-  team_id      int  references public.teams(id) on delete set null,
   role         text not null default 'member' check (role in ('member','admin')),
   phone        text,
   group_label  text,                           -- 근무표 상단 명단 구분
@@ -40,14 +31,13 @@ create table if not exists public.members (
 -- 월별 근무편성표
 create table if not exists public.schedules (
   id         uuid primary key default gen_random_uuid(),
-  team_id    int  not null references public.teams(id) on delete cascade,
   year       int  not null,
   month      int  not null check (month between 1 and 12),
   memo       text,
   created_by uuid references public.members(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (team_id, year, month)
+  unique (year, month)
 );
 
 -- 개별 근무 배정 (근무표의 칸 하나)
@@ -105,15 +95,11 @@ create index if not exists change_logs_schedule_idx on public.change_logs (sched
 -- 로그인 전에는 아무 데이터도 못 읽으므로, 이름 목록만 볼 수 있는 뷰를 연다.
 -- (전화번호, 권한 등 민감한 열은 제외)
 create or replace view public.public_members as
-  select id, name, team_id, login_code, weekend_only
+  select id, name, login_code, weekend_only
   from public.members
   where active = true;
 
 grant select on public.public_members to anon, authenticated;
-
--- 로그인 화면의 조 선택 버튼용 (조 이름은 민감한 정보가 아니다)
-drop policy if exists teams_public_read on public.teams;
-create policy teams_public_read on public.teams for select to anon using (true);
 
 -- --- 3. 도우미 함수 ---------------------------------------------------------
 
@@ -136,7 +122,6 @@ $fn$;
 -- 원칙: 로그인한 사람은 모두 읽기는 자유, 쓰기는 아래 함수를 통해서만.
 --       관리자만 직접 쓰기가 가능하다.
 
-alter table public.teams       enable row level security;
 alter table public.posts       enable row level security;
 alter table public.members     enable row level security;
 alter table public.schedules   enable row level security;
@@ -147,7 +132,7 @@ alter table public.change_logs enable row level security;
 do $blk$
 declare t text;
 begin
-  foreach t in array array['teams','posts','members','schedules','shifts','day_notes','change_logs'] loop
+  foreach t in array array['posts','members','schedules','shifts','day_notes','change_logs'] loop
     execute format('drop policy if exists %I on public.%I', t || '_read', t);
     execute format('drop policy if exists %I on public.%I', t || '_admin_write', t);
     execute format('create policy %I on public.%I for select to authenticated using (true)', t || '_read', t);
@@ -350,11 +335,11 @@ end $fn$;
 
 -- --- 8. 근무표 일괄 등록 (엑셀 / 직접입력 공통) ----------------------
 -- p_rows 예시:
--- [{"date":"2026-07-01","cells":[{"post":"시공원","name":"박향란"},
+-- [{"date":"2026-09-01","cells":[{"post":"시공원","name":"박향란"},
 --                                {"post":"기당미술관","closed":true}]}, ...]
 
 create or replace function public.import_schedule(
-  p_team int, p_year int, p_month int, p_rows jsonb, p_memo text default null
+  p_year int, p_month int, p_rows jsonb, p_memo text default null
 )
 returns uuid
 language plpgsql security definer set search_path = public as $fn$
@@ -374,17 +359,16 @@ begin
     raise exception '관리자만 근무표를 등록할 수 있습니다.';
   end if;
 
-  insert into public.schedules (team_id, year, month, memo, created_by)
-  values (p_team, p_year, p_month, p_memo, me_id)
-  on conflict (team_id, year, month)
+  insert into public.schedules (year, month, memo, created_by)
+  values (p_year, p_month, p_memo, me_id)
+  on conflict (year, month)
     do update set memo = coalesce(excluded.memo, public.schedules.memo), updated_at = now()
   returning id into sched_id;
 
   for row_json in select * from jsonb_array_elements(p_rows) loop
     d := (row_json->>'date')::date;
     for cell in select * from jsonb_array_elements(row_json->'cells') loop
-      select id into v_post_id from public.posts
-        where team_id = p_team and name = (cell->>'post');
+      select id into v_post_id from public.posts where name = (cell->>'post');
       if v_post_id is null then
         raise exception '근무지 "%" 를 찾을 수 없습니다. 근무지 이름을 확인하세요.', (cell->>'post');
       end if;
@@ -394,7 +378,7 @@ begin
       if not v_closed and coalesce(cell->>'name','') <> '' then
         select id into v_member_id from public.members
           where name = (cell->>'name') and active = true
-          order by (team_id = p_team) desc limit 1;
+          order by created_at limit 1;
         if v_member_id is null then
           raise exception '해설사 "%" 를 명단에서 찾을 수 없습니다. 직원 관리에서 먼저 등록하세요.', (cell->>'name');
         end if;

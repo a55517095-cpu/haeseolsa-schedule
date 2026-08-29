@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type {
-  ChangeLog, DayNote, ImportRow, Member, Post, PublicMember, Schedule, Shift, Team,
+  ChangeLog, DayNote, ImportRow, Member, Post, PublicMember, Schedule, Shift,
 } from './types'
 
 /** Supabase 에서 온 오류를 사람이 읽을 수 있는 한국어 한 줄로 */
@@ -17,23 +17,16 @@ export function friendlyError(err: unknown): string {
 
 // ─── 읽기 ────────────────────────────────────────────────────────────────────
 
-export async function fetchTeams(): Promise<Team[]> {
-  const { data, error } = await supabase.from('teams').select('*').order('id')
-  if (error) throw error
-  return data ?? []
-}
-
 export async function fetchPosts(): Promise<Post[]> {
   const { data, error } = await supabase
-    .from('posts').select('*').eq('active', true)
-    .order('team_id').order('sort_order')
+    .from('posts').select('*').eq('active', true).order('sort_order')
   if (error) throw error
   return data ?? []
 }
 
 export async function fetchMembers(): Promise<Member[]> {
   const { data, error } = await supabase
-    .from('members').select('*').order('team_id').order('name')
+    .from('members').select('*').order('name')
   if (error) throw error
   return data ?? []
 }
@@ -41,40 +34,31 @@ export async function fetchMembers(): Promise<Member[]> {
 /** 로그인 화면용 - 아직 로그인하지 않아도 읽을 수 있다 */
 export async function fetchPublicMembers(): Promise<PublicMember[]> {
   const { data, error } = await supabase
-    .from('public_members').select('*').order('team_id').order('name')
+    .from('public_members').select('*').order('name')
   if (error) throw error
   return data ?? []
 }
 
-export async function fetchSchedule(teamId: number, year: number, month: number): Promise<Schedule | null> {
+/** 그 달의 근무표 (한 달에 하나) */
+export async function fetchScheduleForMonth(year: number, month: number): Promise<Schedule | null> {
   const { data, error } = await supabase
-    .from('schedules').select('*')
-    .eq('team_id', teamId).eq('year', year).eq('month', month)
-    .maybeSingle()
+    .from('schedules').select('*').eq('year', year).eq('month', month).maybeSingle()
   if (error) throw error
   return data
 }
 
-/** 여러 조에 걸친 그 달 전체 근무표 (내 근무 화면은 조를 가리지 않고 봐야 한다) */
-export async function fetchSchedulesForMonth(year: number, month: number): Promise<Schedule[]> {
+export async function fetchShifts(scheduleId: string | null): Promise<Shift[]> {
+  if (!scheduleId) return []
   const { data, error } = await supabase
-    .from('schedules').select('*').eq('year', year).eq('month', month).order('team_id')
+    .from('shifts').select('*').eq('schedule_id', scheduleId).order('work_date')
   if (error) throw error
   return data ?? []
 }
 
-export async function fetchShifts(scheduleIds: string[]): Promise<Shift[]> {
-  if (scheduleIds.length === 0) return []
+export async function fetchDayNotes(scheduleId: string | null): Promise<DayNote[]> {
+  if (!scheduleId) return []
   const { data, error } = await supabase
-    .from('shifts').select('*').in('schedule_id', scheduleIds).order('work_date')
-  if (error) throw error
-  return data ?? []
-}
-
-export async function fetchDayNotes(scheduleIds: string[]): Promise<DayNote[]> {
-  if (scheduleIds.length === 0) return []
-  const { data, error } = await supabase
-    .from('day_notes').select('*').in('schedule_id', scheduleIds)
+    .from('day_notes').select('*').eq('schedule_id', scheduleId)
   if (error) throw error
   return data ?? []
 }
@@ -117,14 +101,14 @@ export async function setShiftClosed(shiftId: string, closed: boolean): Promise<
 
 /** 관리자: 근무표 일괄 등록 */
 export async function importSchedule(
-  teamId: number, year: number, month: number, rows: ImportRow[], memo?: string,
+  year: number, month: number, rows: ImportRow[], memo?: string,
 ): Promise<string> {
   const payload = rows.map((r) => ({
     date: r.date,
     cells: r.cells.map((c) => ({ post: c.post, name: c.name, closed: c.closed })),
   }))
   const { data, error } = await supabase.rpc('import_schedule', {
-    p_team: teamId, p_year: year, p_month: month, p_rows: payload, p_memo: memo ?? null,
+    p_year: year, p_month: month, p_rows: payload, p_memo: memo ?? null,
   })
   if (error) throw error
   return data as string
@@ -155,7 +139,7 @@ export const changeMyPin = (pin: string) =>
   callFunction<{ ok: true }>('manage-user', { action: 'change_my_pin', pin })
 
 export const adminCreateMember = (payload: {
-  name: string; login_code: string; pin: string; team_id: number | null
+  name: string; login_code: string; pin: string
   role?: 'member' | 'admin'; group_label?: string | null; weekend_only?: boolean; phone?: string | null
 }) => callFunction<{ ok: true }>('manage-user', { action: 'create_member', ...payload })
 

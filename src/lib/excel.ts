@@ -9,11 +9,11 @@ import { isClosedText, normalize } from './match'
 const loadXLSX = (): Promise<typeof XLSXType> => import('xlsx')
 
 /**
- * 업로드용 엑셀 양식
+ * 업로드용 엑셀 양식 (근무지 10곳이 조 구분 없이 한 표에 들어간다)
  *
- *   일자 | 요일 | 시공원 | 기당미술관 | 서복전시관2 | 탐방1 | 탐방2
- *    1   |  수  | 박향란 |  김봉하    |   문상금    |       |
- *    2   |  목  | 문춘희 |  정영자    |   허은주    | 고혜자| 김태순
+ *   일자 | 요일 | 시공원 | 기당미술관 | ... | 거주지1 | 거주지2
+ *    1   |  화  | 휴무   |  김태순    | ... | 현경조  | 김숙향
+ *    2   |  수  | 문상금 |  문춘희    | ... | 이화영  | 김명준
  *
  * - 휴무는 "휴무" 라고 적으면 됩니다.
  * - 빈 칸은 그냥 비워두면 됩니다.
@@ -37,10 +37,10 @@ async function buildTemplateWorkbook(
 }
 
 export async function downloadTemplate(
-  teamName: string, postNames: string[], year: number, month: number,
+  postNames: string[], year: number, month: number,
 ): Promise<void> {
   const { XLSX, wb } = await buildTemplateWorkbook(postNames, year, month)
-  XLSX.writeFile(wb, `${year}년 ${month}월 ${teamName} 근무표 양식.xlsx`)
+  XLSX.writeFile(wb, `${year}년 ${month}월 해설사 근무표 양식.xlsx`)
 }
 
 export type ParsedCell = { post: string; raw: string; closed: boolean }
@@ -153,7 +153,7 @@ export async function parseScheduleWorkbook(
 
 /** 등록된 근무표를 엑셀로 내려받기 (백업/인쇄용) */
 export async function exportScheduleToExcel(
-  teamName: string, year: number, month: number,
+  year: number, month: number,
   postNames: string[],
   lookup: (iso: string, post: string) => string,
 ): Promise<void> {
@@ -168,5 +168,5 @@ export async function exportScheduleToExcel(
   ws['!cols'] = [{ wch: 6 }, { wch: 6 }, ...postNames.map(() => ({ wch: 14 }))]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, `${month}월`)
-  XLSX.writeFile(wb, `${year}년 ${month}월 ${teamName} 근무표.xlsx`)
+  XLSX.writeFile(wb, `${year}년 ${month}월 해설사 근무표.xlsx`)
 }

@@ -7,3 +7,6 @@ dist-ssr
 .DS_Store
 supabase/.temp
 *.tsbuildinfo
+
+# 근무표 원본 이미지 · 임시 엑셀 (해설사 실명이 들어 있어 저장소에 올리지 않는다)
+근무표/

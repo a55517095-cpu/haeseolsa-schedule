@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useApp } from '../state/AppContext'
-import { Empty, Modal, MonthPicker, Notice, Spinner, TeamTabs } from '../components/ui'
+import { Empty, Modal, MonthPicker, Notice, Spinner } from '../components/ui'
 import SwapWizard from '../components/SwapWizard'
 import { exportScheduleToExcel } from '../lib/excel'
 import { friendlyError, setShiftClosed, setShiftMember } from '../lib/api'
@@ -9,24 +9,18 @@ import type { Shift } from '../lib/types'
 
 export default function FullTable() {
   const {
-    me, teams, posts, members, schedules, shifts, dayNotes,
+    me, posts, schedule, shifts, dayNotes,
     year, month, setMonth, loading, error, postById, memberById, refresh, showToast,
   } = useApp()
 
-  const [teamId, setTeamId] = useState<number>(me?.team_id ?? teams[0]?.id ?? 1)
   const [editing, setEditing] = useState<Shift | null>(null)
   const [swapping, setSwapping] = useState<Shift | null>(null)
   const today = todayISO()
   const isAdmin = me?.role === 'admin'
 
-  useEffect(() => {
-    if (me?.team_id && teams.some((t) => t.id === me.team_id)) setTeamId(me.team_id)
-  }, [me?.team_id, teams])
-
-  const schedule = schedules.find((s) => s.team_id === teamId)
-  const teamPosts = useMemo(
-    () => posts.filter((p) => p.team_id === teamId).sort((a, b) => a.sort_order - b.sort_order),
-    [posts, teamId],
+  const sortedPosts = useMemo(
+    () => [...posts].sort((a, b) => a.sort_order - b.sort_order),
+    [posts],
   )
 
   /** (날짜, 근무지) -> 근무 */
@@ -40,11 +34,10 @@ export default function FullTable() {
   }, [shifts, schedule?.id])
 
   const days = daysInMonth(year, month)
-  const teamName = teams.find((t) => t.id === teamId)?.name ?? ''
 
   const download = () => {
-    void exportScheduleToExcel(teamName, year, month, teamPosts.map((p) => p.name), (iso, postName) => {
-      const post = teamPosts.find((p) => p.name === postName)
+    void exportScheduleToExcel(year, month, sortedPosts.map((p) => p.name), (iso, postName) => {
+      const post = sortedPosts.find((p) => p.name === postName)
       const s = post ? grid.get(`${iso}|${post.id}`) : undefined
       if (!s) return ''
       if (s.is_closed) return '휴무'
@@ -57,14 +50,13 @@ export default function FullTable() {
   return (
     <>
       <MonthPicker year={year} month={month} onChange={setMonth} />
-      <TeamTabs teams={teams} value={teamId} onChange={setTeamId} />
 
       {error && <Notice kind="error">{error}</Notice>}
 
       {!schedule ? (
         <Empty
           icon="📄"
-          title={`${year}년 ${month}월 ${teamName} 근무표가 아직 없습니다`}
+          title={`${year}년 ${month}월 근무표가 아직 없습니다`}
           hint={isAdmin ? '[더보기] > [근무표 등록]에서 올릴 수 있습니다.' : '관리자가 올리면 여기에 보입니다.'}
         />
       ) : (
@@ -81,7 +73,7 @@ export default function FullTable() {
               <thead>
                 <tr>
                   <th className="date-cell">일자</th>
-                  {teamPosts.map((p) => <th key={p.id}>{p.name}</th>)}
+                  {sortedPosts.map((p) => <th key={p.id}>{p.name}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -93,7 +85,7 @@ export default function FullTable() {
                       <td className={`date-cell ${w === 0 ? 'sun' : w === 6 ? 'sat' : ''}`} title={note?.body}>
                         {formatDateShort(iso)}{note ? ' *' : ''}
                       </td>
-                      {teamPosts.map((p) => {
+                      {sortedPosts.map((p) => {
                         const s = grid.get(`${iso}|${p.id}`)
                         if (!s) return <td key={p.id} />
                         const isMine = s.member_id === me?.id

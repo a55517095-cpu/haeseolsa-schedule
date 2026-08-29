@@ -91,7 +91,6 @@ Deno.serve(async (req) => {
       const { error: memberErr } = await admin.from('members').insert({
         login_code: loginCode,
         name,
-        team_id: body.team_id ?? null,
         role: body.role === 'admin' ? 'admin' : 'member',
         phone: body.phone ?? null,
         group_label: body.group_label ?? null,

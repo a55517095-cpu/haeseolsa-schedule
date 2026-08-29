@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
-import { MonthPicker, Notice, Spinner, TeamTabs } from '../components/ui'
+import { MonthPicker, Notice, Spinner } from '../components/ui'
 import { friendlyError, importSchedule } from '../lib/api'
 import { downloadTemplate, parseScheduleWorkbook } from '../lib/excel'
 import { matchName } from '../lib/match'
@@ -13,9 +13,8 @@ type DraftRow = { day: number; cells: DraftCell[] }
 type Mode = 'excel' | 'manual'
 
 export default function AdminImport({ onBack }: { onBack: () => void }) {
-  const { teams, posts, members, me, year, month, setMonth, refresh, showToast } = useApp()
+  const { posts, members, year, month, setMonth, refresh, showToast } = useApp()
 
-  const [teamId, setTeamId] = useState<number>(me?.team_id ?? teams[0]?.id ?? 1)
   const [mode, setMode] = useState<Mode>('excel')
   const [draft, setDraft] = useState<DraftRow[] | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
@@ -24,12 +23,10 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const teamName = teams.find((t) => t.id === teamId)?.name ?? ''
-  const teamPosts = useMemo(
-    () => posts.filter((p) => p.team_id === teamId).sort((a, b) => a.sort_order - b.sort_order),
-    [posts, teamId],
+  const postNames = useMemo(
+    () => [...posts].sort((a, b) => a.sort_order - b.sort_order).map((p) => p.name),
+    [posts],
   )
-  const postNames = teamPosts.map((p) => p.name)
   const roster = useMemo(
     () => members.filter((m) => m.active && m.role !== 'admin').map((m) => m.name),
     [members],
@@ -89,7 +86,7 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
       setError(`이름을 알 수 없는 칸이 ${unresolved}개 있습니다. 빨간 칸을 눌러 사람을 골라주시거나 [비움]으로 두세요.`)
       return
     }
-    if (!confirm(`${year}년 ${month}월 ${teamName} 근무표를 등록합니다.\n이미 등록된 같은 달 근무표가 있으면 새 내용으로 덮어씁니다.\n계속할까요?`)) return
+    if (!confirm(`${year}년 ${month}월 근무표를 등록합니다.\n이미 등록된 같은 달 근무표가 있으면 새 내용으로 덮어씁니다.\n계속할까요?`)) return
 
     setBusy('등록하는 중입니다...'); setError(null)
     try {
@@ -97,9 +94,9 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
         date: `${year}-${String(month).padStart(2, '0')}-${String(r.day).padStart(2, '0')}`,
         cells: r.cells.map((c) => ({ post: c.post, name: c.name, closed: c.closed })),
       }))
-      await importSchedule(teamId, year, month, rows, memo.trim() || undefined)
+      await importSchedule(year, month, rows, memo.trim() || undefined)
       await refresh()
-      showToast(`${year}년 ${month}월 ${teamName} 근무표를 등록했습니다.`)
+      showToast(`${year}년 ${month}월 근무표를 등록했습니다.`)
       reset()
       onBack()
     } catch (e) {
@@ -136,7 +133,7 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
 
     return (
       <>
-        <div className="section-title">{year}년 {month}월 {teamName} — 검토</div>
+        <div className="section-title">{year}년 {month}월 — 검토</div>
 
         {warnings.map((w, i) => <Notice key={i} kind="warn">{w}</Notice>)}
         {unknownCount > 0 && (
@@ -208,9 +205,8 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
     <>
       <button className="btn ghost small" style={{ marginBottom: 14 }} onClick={onBack}>← 더보기</button>
 
-      <div className="section-title">어느 달, 어느 조의 근무표인가요?</div>
+      <div className="section-title">어느 달 근무표인가요?</div>
       <MonthPicker year={year} month={month} onChange={setMonth} />
-      <TeamTabs teams={teams} value={teamId} onChange={setTeamId} />
 
       <div className="section-title">어떻게 넣으시겠습니까?</div>
       <div className="tabs">
@@ -231,7 +227,7 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
           <button
             className="btn secondary"
             style={{ marginBottom: 10 }}
-            onClick={() => void downloadTemplate(teamName, postNames, year, month)}
+            onClick={() => void downloadTemplate(postNames, year, month)}
           >
             빈 양식 내려받기
           </button>

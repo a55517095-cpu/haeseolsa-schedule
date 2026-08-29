@@ -16,17 +16,16 @@ type Stage = 'pick-date' | 'pick-shift' | 'confirm' | 'done'
  * 저장 직후에는 되돌리기 버튼을 같은 화면에 띄워, 잘못 눌렀을 때 즉시 되돌릴 수 있게 한다.
  */
 export default function SwapWizard({ myShift, onClose }: Props) {
-  const { me, shifts, posts, schedules, memberById, postById, showToast, refresh } = useApp()
+  const { me, shifts, posts, memberById, postById, showToast, refresh } = useApp()
 
   const [stage, setStage] = useState<Stage>('pick-date')
-  const [otherTeams, setOtherTeams] = useState(false)
+
   const [pickedDate, setPickedDate] = useState<string | null>(null)
   const [target, setTarget] = useState<Shift | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [swapLogId, setSwapLogId] = useState<string | null>(null)
 
-  const myScheduleTeam = schedules.find((s) => s.id === myShift.schedule_id)?.team_id ?? null
   const myPost = postById(myShift.post_id)
   const today = todayISO()
 
@@ -37,13 +36,9 @@ export default function SwapWizard({ myShift, onClose }: Props) {
       if (s.is_closed || !s.member_id) return false
       if (s.member_id === me?.id) return false
       if (s.work_date < today) return false
-      if (!otherTeams) {
-        const team = schedules.find((x) => x.id === s.schedule_id)?.team_id ?? null
-        if (team !== myScheduleTeam) return false
-      }
       return true
     })
-  }, [shifts, myShift.id, me?.id, today, otherTeams, schedules, myScheduleTeam])
+  }, [shifts, myShift.id, me?.id, today])
 
   const dates = useMemo(() => {
     const set = new Set(candidates.map((s) => s.work_date))
@@ -214,17 +209,9 @@ export default function SwapWizard({ myShift, onClose }: Props) {
       <div style={{ fontWeight: 700, marginBottom: 12 }}>어느 날짜와 바꾸시겠습니까?</div>
 
       {dates.length === 0 ? (
-        <>
-          <Notice kind="warn">바꿀 수 있는 근무가 없습니다.</Notice>
-          {!otherTeams && (
-            <button className="btn secondary" onClick={() => setOtherTeams(true)}>
-              다른 조의 근무도 보기
-            </button>
-          )}
-        </>
+        <Notice kind="warn">바꿀 수 있는 근무가 없습니다.</Notice>
       ) : (
-        <>
-          <div className="choice-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))' }}>
+        <div className="choice-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))' }}>
             {dates.map((d) => {
               const w = weekdayOf(d)
               return (
@@ -237,22 +224,7 @@ export default function SwapWizard({ myShift, onClose }: Props) {
                 </button>
               )
             })}
-          </div>
-          <label
-            style={{
-              display: 'flex', alignItems: 'center', gap: 10, marginTop: 18,
-              fontWeight: 700, minHeight: 'var(--tap)',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={otherTeams}
-              onChange={(e) => setOtherTeams(e.target.checked)}
-              style={{ width: 26, height: 26, minHeight: 0 }}
-            />
-            다른 조의 근무도 함께 보기
-          </label>
-        </>
+        </div>
       )}
 
       <button className="btn ghost" style={{ marginTop: 16 }} onClick={onClose}>그만두기</button>

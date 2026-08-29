@@ -8,14 +8,13 @@ import AdminMembers from './AdminMembers'
 type Sub = null | 'import' | 'members'
 
 export default function More() {
-  const { me, teams, fontScale, setFontScale, signOut, showToast } = useApp()
+  const { me, fontScale, setFontScale, signOut, showToast } = useApp()
   const [sub, setSub] = useState<Sub>(null)
   const [pinOpen, setPinOpen] = useState(false)
 
   if (sub === 'import') return <AdminImport onBack={() => setSub(null)} />
   if (sub === 'members') return <AdminMembers onBack={() => setSub(null)} />
 
-  const teamName = teams.find((t) => t.id === me?.team_id)?.name ?? '-'
   const installed = window.matchMedia('(display-mode: standalone)').matches
 
   return (
@@ -23,7 +22,7 @@ export default function More() {
       <div className="card">
         <div style={{ fontSize: '1.35rem', fontWeight: 800 }}>{me?.name} 님</div>
         <div className="help">
-          {teamName}
+          {me?.group_label ?? '해설사'}
           {me?.role === 'admin' && ' · 관리자'}
         </div>
       </div>

@@ -1,23 +1,21 @@
 import { useMemo, useState } from 'react'
 import { useApp } from '../state/AppContext'
-import { Modal, Notice, Spinner, TeamTabs } from '../components/ui'
+import { Modal, Notice, Spinner } from '../components/ui'
 import {
   adminCreateMember, adminLinkMember, adminResetPin, adminSetActive, friendlyError,
 } from '../lib/api'
 import type { Member } from '../lib/types'
 
 export default function AdminMembers({ onBack }: { onBack: () => void }) {
-  const { teams, members, refresh, showToast } = useApp()
-  const [teamId, setTeamId] = useState<number>(teams[0]?.id ?? 1)
+  const { members, refresh, showToast } = useApp()
   const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const list = useMemo(
-    () => members
-      .filter((m) => m.team_id === teamId || (teamId === teams[0]?.id && m.team_id == null))
+    () => [...members]
       .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, 'ko')),
-    [members, teamId, teams],
+    [members],
   )
 
   const noAccount = members.filter((m) => m.active && !m.auth_user_id)
@@ -56,8 +54,6 @@ export default function AdminMembers({ onBack }: { onBack: () => void }) {
           이름 옆 [계정 만들기]를 눌러 PIN을 정해주세요.
         </Notice>
       )}
-
-      <TeamTabs teams={teams} value={teamId} onChange={setTeamId} />
 
       <button className="btn" style={{ marginBottom: 16 }} onClick={() => setAdding(true)}>
         해설사 추가하기
@@ -113,7 +109,6 @@ export default function AdminMembers({ onBack }: { onBack: () => void }) {
 
       {adding && (
         <AddMemberModal
-          defaultTeamId={teamId}
           onClose={() => setAdding(false)}
           onSaved={async (name) => {
             setAdding(false)
@@ -127,25 +122,23 @@ export default function AdminMembers({ onBack }: { onBack: () => void }) {
 }
 
 function AddMemberModal({
-  defaultTeamId, onClose, onSaved,
-}: { defaultTeamId: number; onClose: () => void; onSaved: (name: string) => Promise<void> }) {
-  const { teams, members } = useApp()
+  onClose, onSaved,
+}: { onClose: () => void; onSaved: (name: string) => Promise<void> }) {
+  const { members } = useApp()
   const [name, setName] = useState('')
-  const [teamId, setTeamId] = useState(defaultTeamId)
   const [pin, setPin] = useState('0000')
   const [weekendOnly, setWeekendOnly] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  /** 사용자는 절대 입력하지 않는 내부 식별자를 자동으로 만든다 (a01, a02, ...) */
-  const suggestCode = (team: number) => {
-    const prefix = team === 1 ? 'a' : team === 2 ? 'b' : `t${team}`
+  /** 사용자는 절대 입력하지 않는 내부 식별자를 자동으로 만든다 (g01, g02, ...) */
+  const suggestCode = () => {
     const used = new Set(members.map((m) => m.login_code))
     for (let i = 1; i < 500; i++) {
-      const code = `${prefix}${String(i).padStart(2, '0')}`
+      const code = `g${String(i).padStart(2, '0')}`
       if (!used.has(code)) return code
     }
-    return `${prefix}${Date.now()}`
+    return `g${Date.now()}`
   }
 
   const submit = async () => {
@@ -158,9 +151,8 @@ function AddMemberModal({
     try {
       await adminCreateMember({
         name: name.trim(),
-        login_code: suggestCode(teamId),
+        login_code: suggestCode(),
         pin,
-        team_id: teamId,
         weekend_only: weekendOnly,
       })
       await onSaved(name.trim())
@@ -178,11 +170,6 @@ function AddMemberModal({
       <div className="field">
         <label htmlFor="new-name">이름</label>
         <input id="new-name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
-
-      <div className="field">
-        <label>조</label>
-        <TeamTabs teams={teams} value={teamId} onChange={setTeamId} />
       </div>
 
       <div className="field">

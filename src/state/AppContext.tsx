@@ -4,18 +4,17 @@ import {
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import {
-  fetchChangeLogs, fetchDayNotes, fetchMembers, fetchPosts, fetchSchedulesForMonth,
-  fetchShifts, fetchTeams, friendlyError,
+  fetchChangeLogs, fetchDayNotes, fetchMembers, fetchPosts, fetchScheduleForMonth,
+  fetchShifts, friendlyError,
 } from '../lib/api'
 import { currentYearMonth } from '../lib/date'
-import type { ChangeLog, DayNote, Member, Post, Schedule, Shift, Team } from '../lib/types'
+import type { ChangeLog, DayNote, Member, Post, Schedule, Shift } from '../lib/types'
 
 type Ctx = {
   session: Session | null
   me: Member | null
   ready: boolean
 
-  teams: Team[]
   posts: Post[]
   members: Member[]
 
@@ -23,7 +22,7 @@ type Ctx = {
   month: number
   setMonth: (year: number, month: number) => void
 
-  schedules: Schedule[]
+  schedule: Schedule | null
   shifts: Shift[]
   dayNotes: DayNote[]
   logs: ChangeLog[]
@@ -59,7 +58,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Member | null>(null)
   const [ready, setReady] = useState(false)
 
-  const [teams, setTeams] = useState<Team[]>([])
   const [posts, setPosts] = useState<Post[]>([])
   const [members, setMembers] = useState<Member[]>([])
 
@@ -67,7 +65,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [year, setYear] = useState(initial.year)
   const [month, setMonthState] = useState(initial.month)
 
-  const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [schedule, setSchedule] = useState<Schedule | null>(null)
   const [shifts, setShifts] = useState<Shift[]>([])
   const [dayNotes, setDayNotes] = useState<DayNote[]>([])
   const [logs, setLogs] = useState<ChangeLog[]>([])
@@ -104,7 +102,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSession(next)
       if (!next) {
         setMe(null)
-        setSchedules([]); setShifts([]); setDayNotes([]); setLogs([])
+        setSchedule(null); setShifts([]); setDayNotes([]); setLogs([])
         setReady(true)
       }
     })
@@ -116,8 +114,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadBase = useCallback(async () => {
     if (!session) return
     try {
-      const [t, p, m] = await Promise.all([fetchTeams(), fetchPosts(), fetchMembers()])
-      setTeams(t); setPosts(p); setMembers(m)
+      const [p, m] = await Promise.all([fetchPosts(), fetchMembers()])
+      setPosts(p); setMembers(m)
       setMe(m.find((x) => x.auth_user_id === session.user.id) ?? null)
       setError(null)
     } catch (e) {
@@ -135,12 +133,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!session) return
     setLoading(true)
     try {
-      const scheds = await fetchSchedulesForMonth(year, month)
-      const ids = scheds.map((s) => s.id)
+      const sched = await fetchScheduleForMonth(year, month)
       const [sh, notes, lg] = await Promise.all([
-        fetchShifts(ids), fetchDayNotes(ids), fetchChangeLogs(150),
+        fetchShifts(sched?.id ?? null), fetchDayNotes(sched?.id ?? null), fetchChangeLogs(150),
       ])
-      setSchedules(scheds); setShifts(sh); setDayNotes(notes); setLogs(lg)
+      setSchedule(sched); setShifts(sh); setDayNotes(notes); setLogs(lg)
       setError(null)
     } catch (e) {
       setError(friendlyError(e))
@@ -185,10 +182,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     session, me, ready,
-    teams, posts, members,
+    posts, members,
     year, month,
     setMonth: (y, m) => { setYear(y); setMonthState(m) },
-    schedules, shifts, dayNotes, logs,
+    schedule, shifts, dayNotes, logs,
     loading, error,
     refresh: async () => { await loadBase(); await loadMonth() },
     memberById: (id) => (id ? memberIndex.get(id) : undefined),

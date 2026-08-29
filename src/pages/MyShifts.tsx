@@ -7,7 +7,7 @@ import type { Shift } from '../lib/types'
 
 export default function MyShifts() {
   const {
-    me, shifts, dayNotes, logs, schedules, teams, year, month, setMonth,
+    me, shifts, dayNotes, logs, year, month, setMonth,
     loading, error, postById,
   } = useApp()
 
@@ -35,10 +35,6 @@ export default function MyShifts() {
   }, [logs, me?.id])
 
   const noteFor = (iso: string) => dayNotes.find((n) => n.work_date === iso)?.body
-  const teamNameOf = (scheduleId: string) => {
-    const teamId = schedules.find((s) => s.id === scheduleId)?.team_id
-    return teams.find((t) => t.id === teamId)?.name ?? ''
-  }
 
   const renderCard = (s: Shift, isPast: boolean) => {
     const w = weekdayOf(s.work_date)
@@ -96,11 +92,6 @@ export default function MyShifts() {
         <>
           <div className="section-title">
             앞으로의 내 근무 {upcoming.length > 0 && `(${upcoming.length}일)`}
-            {schedules.length > 0 && (
-              <span style={{ float: 'right', fontWeight: 600 }}>
-                {teamNameOf(mine[0].schedule_id)}
-              </span>
-            )}
           </div>
 
           {upcoming.length === 0

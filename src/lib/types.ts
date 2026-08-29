@@ -1,8 +1,5 @@
-export type Team = { id: number; name: string }
-
 export type Post = {
   id: string
-  team_id: number
   name: string
   sort_order: number
   active: boolean
@@ -13,7 +10,6 @@ export type Member = {
   auth_user_id: string | null
   login_code: string
   name: string
-  team_id: number | null
   role: 'member' | 'admin'
   phone: string | null
   group_label: string | null
@@ -25,14 +21,12 @@ export type Member = {
 export type PublicMember = {
   id: string
   name: string
-  team_id: number | null
   login_code: string
   weekend_only: boolean
 }
 
 export type Schedule = {
   id: string
-  team_id: number
   year: number
   month: number
   memo: string | null

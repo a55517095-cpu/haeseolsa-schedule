@@ -43,7 +43,7 @@
 1. <https://supabase.com> 에서 새 프로젝트를 만듭니다. (지역은 **Northeast Asia (Seoul)** 추천)
 2. `SQL Editor` 를 열고 **`supabase/schema.sql`** 의 내용을 전부 붙여넣고 실행합니다.
 3. 이어서 **`supabase/seed.sql`** 을 붙여넣고 실행합니다.
-   - 2026년 7월 근무표에 있던 조·근무지·해설사 25명이 등록됩니다.
+   - 2026년 9월 근무표에 있던 근무지 10곳·해설사 25명이 등록됩니다.
    - 명단은 나중에 앱의 `[더보기] → [해설사 명단 관리]` 에서 얼마든지 고칠 수 있습니다.
 
 ### 2-2. 첫 관리자 계정 만들기
@@ -117,7 +117,7 @@ Vercel/Netlify에 GitHub 저장소를 연결하면 `npm run build` 는 자동으
 
 > 근무표를 휴대폰에서 보실 수 있습니다.
 > 아래 주소를 누르세요. → (배포된 주소)
-> 본인 조 → 본인 이름 → 숫자 4자리(처음엔 **0000**) 를 누르면 됩니다.
+> 본인 이름 → 숫자 4자리(처음엔 **0000**) 를 누르면 됩니다.
 > 자주 쓰시려면 **홈 화면에 추가**를 해두세요. (앱 안 [더보기] 화면에 방법이 그림으로 있습니다)
 
 - 아이폰: 사파리 아래 **공유 버튼(□↑)** → **홈 화면에 추가**
@@ -190,12 +190,12 @@ Vercel/Netlify에 GitHub 저장소를 연결하면 `npm run build` 는 자동으
 ```
 supabase/
   schema.sql                     테이블 · 보안규칙 · 교대/되돌리기 함수
-  seed.sql                       조 · 근무지 · 해설사 명단 초기 데이터
+  seed.sql                       근무지 · 해설사 명단 초기 데이터
   functions/manage-user/         계정 생성 · PIN 초기화 (서비스 키 필요)
 src/
-  pages/Login.tsx                조 → 이름 → PIN 3단계 로그인
+  pages/Login.tsx                이름 → PIN 2단계 로그인
   pages/MyShifts.tsx             내 근무 (기본 화면)
-  pages/FullTable.tsx            전체 근무표 (조별 표)
+  pages/FullTable.tsx            전체 근무표 (근무지 10곳 한 표)
   pages/History.tsx              변경 이력 · 되돌리기
   pages/More.tsx                 글자 크기 · PIN 변경 · 관리자 메뉴
   pages/AdminImport.tsx          근무표 등록 (엑셀/직접입력 + 검토표)
