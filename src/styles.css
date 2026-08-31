@@ -434,12 +434,13 @@ table.grid td.clickable { cursor: pointer; }
 .choice[aria-pressed='true'] { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-dark); }
 .choice:disabled { opacity: .35; }
 
-/* 로그인 첫 화면의 이름 목록: 한 줄에 세 명씩, 크게 */
-.name-grid { grid-template-columns: repeat(3, 1fr); }
+/* 로그인 첫 화면의 이름 목록: 한 줄에 네 명씩.
+   (세 명씩이면 줄이 아홉 줄이라 아래쪽 이름이 화면 밖으로 밀렸다) */
+.name-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .name-grid .choice {
-  min-height: 72px;
-  padding: 12px 4px;
-  font-size: 1.35rem;
+  min-height: 66px;
+  padding: 10px 2px;
+  font-size: 1.15rem;
   white-space: nowrap;
 }
 
@@ -457,7 +458,7 @@ table.grid td.clickable { cursor: pointer; }
   .login-wrap.names .login-title { margin: 14px 0 22px; }
   .login-wrap.names .login-title .app-name { font-size: 2.1rem; }
   .login-wrap.names .login-title .sub { font-size: 1.2rem; }
-  .name-grid { gap: 14px; }
+  .name-grid { gap: 12px; }
   .name-grid .choice { min-height: 92px; font-size: 1.9rem; }
 }
 
@@ -467,7 +468,7 @@ table.grid td.clickable { cursor: pointer; }
   .login-wrap.names .login-title .app-name { font-size: 2.5rem; }
   .login-wrap.names .login-title .sub { font-size: 1.35rem; }
   .name-grid { gap: 14px; }
-  .name-grid .choice { min-height: 104px; font-size: 2.3rem; }
+  .name-grid .choice { min-height: 110px; font-size: 2.5rem; }
 }
 
 /* ─── 로그인 / PIN ───────────────────────────────────────────────────────── */
