@@ -25,22 +25,39 @@ const TITLES: Record<Tab, string> = {
 }
 
 export default function App() {
-  const { session, me, ready, toast, signOut, needsPinChange, dismissPinPrompt, showToast } = useApp()
+  const {
+    session, me, ready, error, refresh, toast, signOut,
+    needsPinChange, dismissPinPrompt, showToast,
+  } = useApp()
   const [tab, setTab] = useState<Tab>('my')
 
   if (!ready) return <div className="app"><Spinner /></div>
   if (!session) return <div className="app"><Login /></div>
 
-  // 로그인은 됐지만 명단에 연결되지 않은 계정
+  // 로그인은 살아 있는데 내 정보를 못 가져온 상태.
+  // 명단에 정말 없는 것과, 잠깐 못 불러온 것(인터넷 끊김 등)은 다르게 안내한다.
+  // 여기서 로그아웃을 권하면 애써 유지한 로그인이 풀려버린다.
   if (!me) {
     return (
       <div className="app">
         <div className="page">
-          <Notice kind="error">
-            이 계정이 해설사 명단에 연결되어 있지 않습니다.
-            관리자에게 알려주세요.
-          </Notice>
-          <button className="btn ghost" onClick={() => void signOut()}>로그아웃</button>
+          {error ? (
+            <>
+              <Notice kind="error">
+                근무표를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.
+              </Notice>
+              <button className="btn" onClick={() => void refresh()}>다시 시도</button>
+              <div className="help" style={{ marginTop: 12 }}>{error}</div>
+            </>
+          ) : (
+            <Notice kind="error">
+              이 계정이 해설사 명단에 연결되어 있지 않습니다.
+              관리자에게 알려주세요.
+            </Notice>
+          )}
+          <button className="btn ghost" style={{ marginTop: 16 }} onClick={() => void signOut()}>
+            로그아웃
+          </button>
         </div>
       </div>
     )
