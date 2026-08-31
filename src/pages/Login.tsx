@@ -70,7 +70,7 @@ export default function Login() {
     })
 
     return (
-      <div className="login-wrap">
+      <div className="login-wrap names">
         <div className="login-title">
           <div className="app-name">해설사 근무표</div>
           <div className="sub">본인 이름을 눌러주세요</div>
