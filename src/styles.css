@@ -443,8 +443,8 @@ table.grid td.clickable { cursor: pointer; }
    화면 밖으로 밀린다. */
 .name-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .name-grid .choice {
-  min-height: 64px;
-  padding: 8px 4px;
+  min-height: 52px;
+  padding: 6px 4px;
   font-size: 1.35rem;
   white-space: nowrap;
 }
@@ -464,7 +464,7 @@ table.grid td.clickable { cursor: pointer; }
   .login-wrap.names .login-title .app-name { font-size: 2.1rem; }
   .login-wrap.names .login-title .sub { font-size: 1.2rem; }
   .name-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; }
-  .name-grid .choice { min-height: 88px; font-size: 1.9rem; }
+  .name-grid .choice { min-height: 72px; font-size: 1.7rem; }
 }
 
 @media (min-width: 1024px) {
@@ -473,7 +473,7 @@ table.grid td.clickable { cursor: pointer; }
   .login-wrap.names .login-title .app-name { font-size: 2.5rem; }
   .login-wrap.names .login-title .sub { font-size: 1.35rem; }
   .name-grid { gap: 14px; }
-  .name-grid .choice { min-height: 100px; font-size: 2.4rem; }
+  .name-grid .choice { min-height: 84px; font-size: 2rem; }
 }
 
 /* ─── 로그인 / PIN ───────────────────────────────────────────────────────── */
