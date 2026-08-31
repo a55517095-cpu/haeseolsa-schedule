@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useApp } from './state/AppContext'
 import { Notice, Spinner } from './components/ui'
+import ChangePinModal from './components/ChangePinModal'
 import Login from './pages/Login'
 import MyShifts from './pages/MyShifts'
 import FullTable from './pages/FullTable'
@@ -24,7 +25,7 @@ const TITLES: Record<Tab, string> = {
 }
 
 export default function App() {
-  const { session, me, ready, toast, signOut } = useApp()
+  const { session, me, ready, toast, signOut, needsPinChange, dismissPinPrompt, showToast } = useApp()
   const [tab, setTab] = useState<Tab>('my')
 
   if (!ready) return <div className="app"><Spinner /></div>
@@ -71,6 +72,16 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      {needsPinChange && (
+        <ChangePinModal
+          title="비밀번호를 바꿔주세요"
+          subtitle="처음 비밀번호(0000)를 그대로 쓰고 계십니다. 나만 아는 숫자 4자리로 정해주세요."
+          laterLabel="나중에 변경하기"
+          onClose={dismissPinPrompt}
+          onDone={() => { dismissPinPrompt(); showToast('비밀번호를 바꿨습니다.') }}
+        />
+      )}
 
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>

@@ -340,6 +340,17 @@ table.grid td.clickable { cursor: pointer; }
 .choice[aria-pressed='true'] { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-dark); }
 .choice:disabled { opacity: .35; }
 
+/* 로그인 첫 화면의 이름 목록: 한 줄에 세 명씩 */
+.name-grid { grid-template-columns: repeat(3, 1fr); }
+.name-grid .choice { padding: 12px 4px; white-space: nowrap; }
+
+/* 관리자 버튼은 회색으로 구분한다 (목록 맨 끝) */
+.choice.admin {
+  background: #e7eaef;
+  border-color: var(--line-strong);
+  color: var(--ink-soft);
+}
+
 /* ─── 로그인 / PIN ───────────────────────────────────────────────────────── */
 
 .login-wrap {

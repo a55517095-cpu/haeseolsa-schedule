@@ -1,14 +1,13 @@
 import { useState } from 'react'
 import { useApp } from '../state/AppContext'
-import { Modal, Notice } from '../components/ui'
-import { changeMyPin, friendlyError } from '../lib/api'
+import ChangePinModal from '../components/ChangePinModal'
 import AdminImport from './AdminImport'
 import AdminMembers from './AdminMembers'
 
 type Sub = null | 'import' | 'members'
 
 export default function More() {
-  const { me, fontScale, setFontScale, signOut, showToast } = useApp()
+  const { me, fontScale, setFontScale, signOut, showToast, dismissPinPrompt } = useApp()
   const [sub, setSub] = useState<Sub>(null)
   const [pinOpen, setPinOpen] = useState(false)
 
@@ -96,56 +95,9 @@ export default function More() {
       {pinOpen && (
         <ChangePinModal
           onClose={() => setPinOpen(false)}
-          onDone={() => { setPinOpen(false); showToast('비밀번호를 바꿨습니다.') }}
+          onDone={() => { setPinOpen(false); dismissPinPrompt(); showToast('비밀번호를 바꿨습니다.') }}
         />
       )}
     </>
-  )
-}
-
-function ChangePinModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [pin, setPin] = useState('')
-  const [again, setAgain] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const submit = async () => {
-    if (!/^\d{4}$/.test(pin)) return setError('숫자 4자리를 입력해 주세요.')
-    if (pin !== again) return setError('두 번 입력한 숫자가 서로 다릅니다.')
-    setBusy(true); setError(null)
-    try {
-      await changeMyPin(pin)
-      onDone()
-    } catch (e) {
-      setError(friendlyError(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Modal title="비밀번호(PIN) 바꾸기" subtitle="숫자 4자리로 정해주세요." onClose={onClose}>
-      {error && <Notice kind="error">{error}</Notice>}
-      <div className="field">
-        <label htmlFor="pin1">새 비밀번호 4자리</label>
-        <input
-          id="pin1" type="tel" inputMode="numeric" maxLength={4} value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-          style={{ fontSize: '1.6rem', letterSpacing: '.5em', textAlign: 'center' }}
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="pin2">한 번 더 눌러주세요</label>
-        <input
-          id="pin2" type="tel" inputMode="numeric" maxLength={4} value={again}
-          onChange={(e) => setAgain(e.target.value.replace(/\D/g, ''))}
-          style={{ fontSize: '1.6rem', letterSpacing: '.5em', textAlign: 'center' }}
-        />
-      </div>
-      <div className="btn-row">
-        <button className="btn ghost" onClick={onClose} disabled={busy}>그만두기</button>
-        <button className="btn" onClick={submit} disabled={busy}>{busy ? '바꾸는 중...' : '바꾸기'}</button>
-      </div>
-    </Modal>
   )
 }

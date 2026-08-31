@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Modal, Notice, Spinner } from '../components/ui'
+import { DEFAULT_PIN } from '../components/ChangePinModal'
 import {
   adminCreateMember, adminLinkMember, adminResetPin, adminSetActive, friendlyError,
 } from '../lib/api'
@@ -33,11 +34,27 @@ export default function AdminMembers({ onBack }: { onBack: () => void }) {
     }
   }
 
-  const askPin = (who: string): string | null => {
-    const pin = prompt(`${who} 님의 비밀번호(PIN) 숫자 4자리를 정해주세요.`, '0000')
-    if (pin == null) return null
-    if (!/^\d{4}$/.test(pin)) { alert('숫자 4자리로 입력해 주세요.'); return null }
-    return pin
+  /** 계정 없는 사람 전원에게 한 번에 계정을 만들어 준다 (비밀번호는 모두 0000) */
+  const linkAll = async () => {
+    if (!confirm(
+      `계정이 없는 ${noAccount.length}명에게 계정을 만듭니다.
+` +
+      `모두의 처음 비밀번호는 ${DEFAULT_PIN} 입니다. 계속할까요?`,
+    )) return
+
+    setBusy(true); setError(null)
+    const failed: string[] = []
+    for (const m of noAccount) {
+      try {
+        await adminLinkMember(m.id, DEFAULT_PIN)
+      } catch (e) {
+        failed.push(`${m.name}(${friendlyError(e)})`)
+      }
+    }
+    await refresh()
+    setBusy(false)
+    if (failed.length) setError(`${failed.length}명은 만들지 못했습니다 — ${failed.join(', ')}`)
+    else showToast(`${noAccount.length}명의 계정을 만들었습니다. 비밀번호는 모두 ${DEFAULT_PIN} 입니다.`)
   }
 
   if (busy) return <Spinner />
@@ -49,10 +66,15 @@ export default function AdminMembers({ onBack }: { onBack: () => void }) {
       {error && <Notice kind="error">{error}</Notice>}
 
       {noAccount.length > 0 && (
-        <Notice kind="warn">
-          아직 로그인 계정이 없는 사람이 {noAccount.length}명 있습니다.
-          이름 옆 [계정 만들기]를 눌러 PIN을 정해주세요.
-        </Notice>
+        <>
+          <Notice kind="warn">
+            아직 로그인 계정이 없는 사람이 {noAccount.length}명 있습니다.
+            처음 비밀번호는 모두 {DEFAULT_PIN} 이고, 본인이 로그인하면 바꾸라는 안내가 뜹니다.
+          </Notice>
+          <button className="btn" style={{ marginBottom: 16 }} onClick={() => void linkAll()}>
+            {noAccount.length}명 계정 한 번에 만들기 (비밀번호 {DEFAULT_PIN})
+          </button>
+        </>
       )}
 
       <button className="btn" style={{ marginBottom: 16 }} onClick={() => setAdding(true)}>
@@ -76,8 +98,11 @@ export default function AdminMembers({ onBack }: { onBack: () => void }) {
                 <button
                   className="btn small"
                   onClick={() => {
-                    const pin = askPin(m.name)
-                    if (pin) void run(() => adminLinkMember(m.id, pin), `${m.name} 님의 계정을 만들었습니다.`)
+                    if (!confirm(`${m.name} 님의 계정을 만듭니다. 처음 비밀번호는 ${DEFAULT_PIN} 입니다.`)) return
+                    void run(
+                      () => adminLinkMember(m.id, DEFAULT_PIN),
+                      `${m.name} 님의 계정을 만들었습니다. 비밀번호는 ${DEFAULT_PIN} 입니다.`,
+                    )
                   }}
                 >
                   계정 만들기
@@ -86,8 +111,11 @@ export default function AdminMembers({ onBack }: { onBack: () => void }) {
                 <button
                   className="btn ghost small"
                   onClick={() => {
-                    const pin = askPin(m.name)
-                    if (pin) void run(() => adminResetPin(m.id, pin), `${m.name} 님의 PIN을 ${pin} 로 바꿨습니다.`)
+                    if (!confirm(`${m.name} 님의 비밀번호를 ${DEFAULT_PIN} 으로 되돌립니다. 계속할까요?`)) return
+                    void run(
+                      () => adminResetPin(m.id, DEFAULT_PIN),
+                      `${m.name} 님의 비밀번호를 ${DEFAULT_PIN} 으로 되돌렸습니다.`,
+                    )
                   }}
                 >
                   PIN 초기화
@@ -126,7 +154,6 @@ function AddMemberModal({
 }: { onClose: () => void; onSaved: (name: string) => Promise<void> }) {
   const { members } = useApp()
   const [name, setName] = useState('')
-  const [pin, setPin] = useState('0000')
   const [weekendOnly, setWeekendOnly] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -145,14 +172,13 @@ function AddMemberModal({
     if (!name.trim()) return setError('이름을 입력해 주세요.')
     if (members.some((m) => m.name === name.trim() && m.active))
       return setError('같은 이름이 이미 명단에 있습니다.')
-    if (!/^\d{4}$/.test(pin)) return setError('PIN은 숫자 4자리여야 합니다.')
 
     setBusy(true); setError(null)
     try {
       await adminCreateMember({
         name: name.trim(),
         login_code: suggestCode(),
-        pin,
+        pin: DEFAULT_PIN,
         weekend_only: weekendOnly,
       })
       await onSaved(name.trim())
@@ -164,7 +190,7 @@ function AddMemberModal({
   }
 
   return (
-    <Modal title="해설사 추가" subtitle="이름과 처음 쓸 PIN만 정하면 됩니다." onClose={onClose}>
+    <Modal title="해설사 추가" subtitle="이름만 넣으면 됩니다." onClose={onClose}>
       {error && <Notice kind="error">{error}</Notice>}
 
       <div className="field">
@@ -172,14 +198,9 @@ function AddMemberModal({
         <input id="new-name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
 
-      <div className="field">
-        <label htmlFor="new-pin">처음 쓸 비밀번호(PIN) 4자리</label>
-        <input
-          id="new-pin" type="tel" inputMode="numeric" maxLength={4} value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-          style={{ fontSize: '1.4rem', letterSpacing: '.4em', textAlign: 'center' }}
-        />
-        <div className="help">본인이 로그인한 뒤 [더보기]에서 직접 바꿀 수 있습니다.</div>
+      <div className="help" style={{ marginBottom: 4 }}>
+        처음 비밀번호는 <b>{DEFAULT_PIN}</b> 입니다.
+        본인이 처음 로그인하면 바꾸라는 안내가 뜨고, [더보기]에서 언제든 바꿀 수 있습니다.
       </div>
 
       <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 'var(--tap)', fontWeight: 700 }}>

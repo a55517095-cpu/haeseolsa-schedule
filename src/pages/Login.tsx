@@ -3,8 +3,13 @@ import { supabase, emailForLoginCode, passwordForPin } from '../lib/supabase'
 import { fetchPublicMembers, friendlyError } from '../lib/api'
 import type { PublicMember } from '../lib/types'
 import { Notice, Spinner } from '../components/ui'
+import { useApp } from '../state/AppContext'
+
+/** 관리자 계정인가 (로그인 화면에는 role 이 내려오지 않아 login_code 로 가른다) */
+const isAdmin = (p: PublicMember) => p.login_code === 'admin' || p.name === '관리자'
 
 export default function Login() {
+  const { noteLoginPin } = useApp()
   const [people, setPeople] = useState<PublicMember[] | null>(null)
   const [person, setPerson] = useState<PublicMember | null>(null)
   const [pin, setPin] = useState('')
@@ -31,6 +36,10 @@ export default function Login() {
       password: passwordForPin(fullPin),
     })
     setBusy(false)
+    if (!signInError) {
+      // 처음 비밀번호 그대로면 로그인 직후 바꾸기 안내를 띄운다
+      noteLoginPin(fullPin)
+    }
     if (signInError) {
       setPin('')
       setError(
@@ -54,7 +63,11 @@ export default function Login() {
 
   // ─── 1단계: 이름 고르기 ─────────────────────────────────────────────────
   if (!person) {
-    const list = [...people].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+    // 해설사는 가나다순, 관리자는 항상 맨 끝
+    const list = [...people].sort((a, b) => {
+      if (isAdmin(a) !== isAdmin(b)) return isAdmin(a) ? 1 : -1
+      return a.name.localeCompare(b.name, 'ko')
+    })
 
     return (
       <div className="login-wrap">
@@ -63,11 +76,11 @@ export default function Login() {
           <div className="sub">본인 이름을 눌러주세요</div>
         </div>
         {error && <Notice kind="error">{error}</Notice>}
-        <div className="choice-grid">
+        <div className="choice-grid name-grid">
           {list.map((p) => (
             <button
               key={p.id}
-              className="choice"
+              className={isAdmin(p) ? 'choice admin' : 'choice'}
               onClick={() => { setPerson(p); setPin(''); setError(null) }}
             >
               {p.name}

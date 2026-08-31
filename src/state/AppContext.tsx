@@ -40,6 +40,13 @@ type Ctx = {
   toast: string | null
   showToast: (message: string) => void
 
+  /** 처음 비밀번호(0000) 그대로라서 바꾸기 안내를 띄워야 하는가 */
+  needsPinChange: boolean
+  /** 로그인 화면이 방금 누른 PIN 을 알려준다 */
+  noteLoginPin: (pin: string) => void
+  /** 바꿨거나 "나중에" 를 골랐다 — 이번 접속에는 다시 묻지 않는다 */
+  dismissPinPrompt: () => void
+
   signOut: () => Promise<void>
 }
 
@@ -52,6 +59,7 @@ export function useApp(): Ctx {
 }
 
 const FONT_KEY = 'guide-shift-font-scale'
+const DEFAULT_PIN_KEY = 'guide-shift-default-pin'   // 탭을 닫으면 사라진다 (sessionStorage)
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -74,6 +82,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
+
+  // 처음 비밀번호로 들어왔는지. 새로고침해도 유지되도록 sessionStorage 에 둔다.
+  const [needsPinChange, setNeedsPinChange] = useState(
+    () => sessionStorage.getItem(DEFAULT_PIN_KEY) === '1',
+  )
+
+  const noteLoginPin = useCallback((pin: string) => {
+    if (pin === '0000') {
+      sessionStorage.setItem(DEFAULT_PIN_KEY, '1')
+      setNeedsPinChange(true)
+    } else {
+      sessionStorage.removeItem(DEFAULT_PIN_KEY)
+      setNeedsPinChange(false)
+    }
+  }, [])
+
+  const dismissPinPrompt = useCallback(() => {
+    sessionStorage.removeItem(DEFAULT_PIN_KEY)
+    setNeedsPinChange(false)
+  }, [])
 
   const [fontScale, setFontScaleState] = useState(() => {
     const saved = Number(localStorage.getItem(FONT_KEY))
@@ -101,6 +129,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next)
       if (!next) {
+        sessionStorage.removeItem(DEFAULT_PIN_KEY)
+        setNeedsPinChange(false)
         setMe(null)
         setSchedule(null); setShifts([]); setDayNotes([]); setLogs([])
         setReady(true)
@@ -192,6 +222,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     postById: (id) => postIndex.get(id),
     fontScale, setFontScale: setFontScaleState,
     toast, showToast,
+    needsPinChange, noteLoginPin, dismissPinPrompt,
     signOut: async () => { await supabase.auth.signOut() },
   }
 
