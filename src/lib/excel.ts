@@ -47,6 +47,14 @@ export type ParsedCell = { post: string; raw: string; closed: boolean }
 export type ParsedRow = { day: number; cells: ParsedCell[] }
 export type ParseResult = { rows: ParsedRow[]; postColumns: string[]; warnings: string[] }
 
+/** 시트 이름·파일 이름에서 "9월" 같은 표기를 찾아 달을 알아낸다 */
+function monthFromText(text: string): number | null {
+  const m = text.match(/(\d{1,2})\s*월/)
+  if (!m) return null
+  const n = Number(m[1])
+  return n >= 1 && n <= 12 ? n : null
+}
+
 /** 엑셀 셀 하나에서 일자 숫자를 뽑는다. '1', '7/01', '7월 1일', 엑셀 날짜값 모두 지원 */
 function parseDay(value: unknown, month: number): number | null {
   if (value == null || value === '') return null
@@ -80,6 +88,17 @@ export async function parseScheduleWorkbook(
 
   const grid: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true })
   const warnings: string[] = []
+
+  // 화면에서 고른 달과 파일의 달이 다른 실수가 잦다.
+  // (오늘이 8월 31일이면 화면은 8월로 열리는데 올리는 건 9월 근무표인 경우)
+  const fileMonth = monthFromText(`${wb.SheetNames[0]} ${file.name}`)
+  if (fileMonth !== null && fileMonth !== month) {
+    warnings.push(
+      `⚠ 지금 고르신 달은 ${year}년 ${month}월인데, 올리신 파일은 ${fileMonth}월 근무표로 보입니다. ` +
+      `이대로 등록하면 ${month}월 근무표가 됩니다. ` +
+      `[처음으로]를 눌러 위쪽 달을 ${fileMonth}월로 바꾼 뒤 다시 올려주세요.`,
+    )
+  }
   const normalizedPosts = new Map(postNames.map((p) => [normalize(p), p]))
 
   // 근무지 이름이 2개 이상 들어있는 첫 줄을 머리글로 본다
