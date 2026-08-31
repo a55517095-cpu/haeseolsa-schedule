@@ -197,6 +197,28 @@ begin
   select name into a_name from public.members where id = a.member_id;
   select name into b_name from public.members where id = b.member_id;
 
+  -- 같은 날 두 곳에 서게 되는 교대는 거절한다.
+  -- (날짜가 같은 교대는 근무지만 맞바꾸는 것이라 겹칠 일이 없다)
+  if a.work_date <> b.work_date then
+    if exists (
+      select 1 from public.shifts s
+       where s.work_date = a.work_date and s.member_id = b.member_id
+         and s.id <> a.id and s.id <> b.id
+    ) then
+      raise exception '%님은 %월 %일에 이미 다른 근무가 있어 바꿀 수 없습니다.',
+        b_name, extract(month from a.work_date)::int, extract(day from a.work_date)::int;
+    end if;
+
+    if exists (
+      select 1 from public.shifts s
+       where s.work_date = b.work_date and s.member_id = a.member_id
+         and s.id <> a.id and s.id <> b.id
+    ) then
+      raise exception '%님은 %월 %일에 이미 다른 근무가 있어 바꿀 수 없습니다.',
+        a_name, extract(month from b.work_date)::int, extract(day from b.work_date)::int;
+    end if;
+  end if;
+
   update public.shifts set member_id = b.member_id, changed = true, updated_at = now() where id = a.id;
   update public.shifts set member_id = a.member_id, changed = true, updated_at = now() where id = b.id;
 

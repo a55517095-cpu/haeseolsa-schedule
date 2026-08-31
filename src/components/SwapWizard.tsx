@@ -40,12 +40,33 @@ export default function SwapWizard({ myShift, targetShift, onClose }: Props) {
   const myPost = postById(mine?.post_id ?? '')
   const today = todayISO()
 
+  /** 누가 어느 날에 이미 근무가 있는지 (같은 날 두 곳에 서는 것을 막기 위해) */
+  const working = useMemo(() => {
+    const set = new Set<string>()
+    for (const s of shifts) {
+      if (s.member_id && !s.is_closed) set.add(`${s.member_id}|${s.work_date}`)
+    }
+    return set
+  }, [shifts])
+
+  /**
+   * 바꾸면 어느 한쪽이 같은 날 두 곳에 서게 되는가.
+   * 날짜가 같은 교대는 근무지만 맞바꾸는 것이라 겹칠 일이 없다.
+   */
+  const clashes = (m: Shift, t: Shift): boolean => {
+    if (m.work_date === t.work_date) return false
+    return working.has(`${t.member_id}|${m.work_date}`)
+        || working.has(`${m.member_id}|${t.work_date}`)
+  }
+
   /** 상대 근무부터 고른 경우: 내가 내놓을 수 있는 근무 */
   const myShifts = useMemo(
     () => shifts
       .filter((s) => s.member_id === me?.id && !s.is_closed && s.work_date >= today && s.id !== target?.id)
+      .filter((s) => !target || !clashes(s, target))
       .sort((a, b) => a.work_date.localeCompare(b.work_date)),
-    [shifts, me?.id, today, target?.id],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shifts, me?.id, today, target?.id, working],
   )
 
   /** 바꿀 수 있는 근무: 담당자가 있고, 휴무가 아니고, 내 근무가 아닌 것 */
@@ -55,9 +76,11 @@ export default function SwapWizard({ myShift, targetShift, onClose }: Props) {
       if (s.is_closed || !s.member_id) return false
       if (s.member_id === me?.id) return false
       if (s.work_date < today) return false
+      if (mine && clashes(mine, s)) return false
       return true
     })
-  }, [shifts, mine?.id, me?.id, today])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shifts, mine, me?.id, today, working])
 
   const dates = useMemo(() => {
     const set = new Set(candidates.map((s) => s.work_date))
@@ -235,7 +258,10 @@ export default function SwapWizard({ myShift, targetShift, onClose }: Props) {
         <div style={{ fontWeight: 700, marginBottom: 12 }}>내 어느 근무를 내놓으시겠습니까?</div>
 
         {myShifts.length === 0 ? (
-          <Notice kind="warn">내놓을 수 있는 내 근무가 없습니다. (앞으로 남은 근무만 바꿀 수 있습니다)</Notice>
+          <Notice kind="warn">
+            내놓을 수 있는 내 근무가 없습니다.
+            앞으로 남은 근무만 바꿀 수 있고, 같은 날 두 곳에 서게 되는 조합은 빠집니다.
+          </Notice>
         ) : (
           <ul className="list">
             {myShifts.map((s) => (
@@ -272,7 +298,10 @@ export default function SwapWizard({ myShift, targetShift, onClose }: Props) {
       <div style={{ fontWeight: 700, marginBottom: 12 }}>어느 날짜와 바꾸시겠습니까?</div>
 
       {dates.length === 0 ? (
-        <Notice kind="warn">바꿀 수 있는 근무가 없습니다.</Notice>
+        <Notice kind="warn">
+          바꿀 수 있는 근무가 없습니다.
+          같은 날 두 곳에 서게 되는 조합은 고를 수 없습니다.
+        </Notice>
       ) : (
         <div className="choice-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))' }}>
             {dates.map((d) => {
