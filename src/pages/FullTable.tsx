@@ -14,7 +14,8 @@ export default function FullTable() {
   } = useApp()
 
   const [editing, setEditing] = useState<Shift | null>(null)
-  const [swapping, setSwapping] = useState<Shift | null>(null)
+  /** 근무 바꾸기 — 내 칸에서 시작했는지, 남의 칸에서 시작했는지 */
+  const [swapping, setSwapping] = useState<{ mine?: Shift; target?: Shift } | null>(null)
   const today = todayISO()
   const isAdmin = me?.role === 'admin'
 
@@ -34,6 +35,12 @@ export default function FullTable() {
   }, [shifts, schedule?.id])
 
   const days = daysInMonth(year, month)
+
+  /** 남의 칸을 눌러 바꾸려면 내가 내놓을 근무가 하나라도 있어야 한다 */
+  const hasMyShiftToOffer = useMemo(
+    () => shifts.some((s) => s.member_id === me?.id && !s.is_closed && s.work_date >= today),
+    [shifts, me?.id, today],
+  )
 
   const download = () => {
     void exportScheduleToExcel(year, month, sortedPosts.map((p) => p.name), (iso, postName) => {
@@ -65,6 +72,7 @@ export default function FullTable() {
 
           <div className="help" style={{ marginBottom: 10 }}>
             노란색은 내 근무, <span style={{ color: 'var(--ok)', fontWeight: 800 }}>초록 글씨</span>는 변경된 근무입니다.
+            {!isAdmin && ' 내 칸을 누르거나, 바꾸고 싶은 사람의 칸을 눌러 근무를 바꿀 수 있습니다.'}
             <span className="only-narrow"> 표는 옆으로 밀어서 볼 수 있습니다.</span>
           </div>
 
@@ -89,7 +97,10 @@ export default function FullTable() {
                         const s = grid.get(`${iso}|${p.id}`)
                         if (!s) return <td key={p.id} />
                         const isMine = s.member_id === me?.id
-                        const canTap = isAdmin || (isMine && iso >= today)
+                        // 관리자는 아무 칸이나, 근무자는 앞으로의 근무 중
+                        // 내 칸(누구와 바꿀지 고르기) 또는 남의 칸(내 근무를 내놓기)
+                        const swappable = iso >= today && !s.is_closed && !!s.member_id
+                        const canTap = isAdmin || (swappable && (isMine || hasMyShiftToOffer))
                         const classes = [
                           s.is_closed ? 'closed' : '',
                           isMine ? 'mine' : '',
@@ -102,7 +113,9 @@ export default function FullTable() {
                             className={classes}
                             onClick={() => {
                               if (isAdmin) setEditing(s)
-                              else if (canTap) setSwapping(s)
+                              else if (!canTap) return
+                              else if (isMine) setSwapping({ mine: s })
+                              else setSwapping({ target: s })
                             }}
                           >
                             {s.is_closed ? '휴무' : memberById(s.member_id)?.name ?? '—'}
@@ -122,7 +135,13 @@ export default function FullTable() {
         </>
       )}
 
-      {swapping && <SwapWizard myShift={swapping} onClose={() => setSwapping(null)} />}
+      {swapping && (
+        <SwapWizard
+          myShift={swapping.mine}
+          targetShift={swapping.target}
+          onClose={() => setSwapping(null)}
+        />
+      )}
 
       {editing && isAdmin && (
         <AdminCellEditor

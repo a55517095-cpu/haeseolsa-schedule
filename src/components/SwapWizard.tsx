@@ -6,39 +6,58 @@ import { formatDateKo, formatDateShort, todayISO, weekdayOf } from '../lib/date'
 import type { Shift } from '../lib/types'
 import { Modal, Notice, Spinner } from './ui'
 
-type Props = { myShift: Shift; onClose: () => void }
+type Props = {
+  /** 내 근무에서 시작할 때 (내 근무 달력) */
+  myShift?: Shift
+  /** 상대 근무에서 시작할 때 (전체 근무표에서 다른 사람 칸을 누른 경우) */
+  targetShift?: Shift
+  onClose: () => void
+}
 
-type Stage = 'pick-date' | 'pick-shift' | 'confirm' | 'done'
+type Stage = 'pick-mine' | 'pick-date' | 'pick-shift' | 'confirm' | 'done'
 
 /**
  * 근무 바꾸기 마법사.
  * 한 화면에 한 가지만 묻고, 마지막에 "이렇게 바뀝니다"를 크게 보여준 뒤에야 저장한다.
  * 저장 직후에는 되돌리기 버튼을 같은 화면에 띄워, 잘못 눌렀을 때 즉시 되돌릴 수 있게 한다.
+ *
+ * 들어오는 길이 두 가지다.
+ *   내 근무 달력   → myShift 를 들고 온다 → 날짜 고르기 → 상대 고르기 → 확인
+ *   전체 근무표    → targetShift 를 들고 온다 → 내 근무 고르기 → 확인
  */
-export default function SwapWizard({ myShift, onClose }: Props) {
+export default function SwapWizard({ myShift, targetShift, onClose }: Props) {
   const { me, shifts, posts, memberById, postById, showToast, refresh } = useApp()
 
-  const [stage, setStage] = useState<Stage>('pick-date')
+  const [mine, setMine] = useState<Shift | null>(myShift ?? null)
+  const [target, setTarget] = useState<Shift | null>(targetShift ?? null)
+  const [stage, setStage] = useState<Stage>(myShift ? 'pick-date' : 'pick-mine')
 
   const [pickedDate, setPickedDate] = useState<string | null>(null)
-  const [target, setTarget] = useState<Shift | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [swapLogId, setSwapLogId] = useState<string | null>(null)
 
-  const myPost = postById(myShift.post_id)
+  const myPost = postById(mine?.post_id ?? '')
   const today = todayISO()
+
+  /** 상대 근무부터 고른 경우: 내가 내놓을 수 있는 근무 */
+  const myShifts = useMemo(
+    () => shifts
+      .filter((s) => s.member_id === me?.id && !s.is_closed && s.work_date >= today && s.id !== target?.id)
+      .sort((a, b) => a.work_date.localeCompare(b.work_date)),
+    [shifts, me?.id, today, target?.id],
+  )
 
   /** 바꿀 수 있는 근무: 담당자가 있고, 휴무가 아니고, 내 근무가 아닌 것 */
   const candidates = useMemo(() => {
     return shifts.filter((s) => {
-      if (s.id === myShift.id) return false
+      if (s.id === mine?.id) return false
       if (s.is_closed || !s.member_id) return false
       if (s.member_id === me?.id) return false
       if (s.work_date < today) return false
       return true
     })
-  }, [shifts, myShift.id, me?.id, today])
+  }, [shifts, mine?.id, me?.id, today])
 
   const dates = useMemo(() => {
     const set = new Set(candidates.map((s) => s.work_date))
@@ -53,11 +72,11 @@ export default function SwapWizard({ myShift, onClose }: Props) {
   )
 
   const doSwap = async () => {
-    if (!target) return
+    if (!target || !mine) return
     setBusy(true)
     setError(null)
     try {
-      const groupId = await swapShifts(myShift.id, target.id)
+      const groupId = await swapShifts(mine.id, target.id)
       const { data } = await supabase
         .from('change_logs').select('id').eq('swap_group_id', groupId).limit(1)
       setSwapLogId(data?.[0]?.id ?? null)
@@ -86,12 +105,12 @@ export default function SwapWizard({ myShift, onClose }: Props) {
   }
 
   // ─── 완료 화면 ────────────────────────────────────────────────────────────
-  if (stage === 'done' && target) {
+  if (stage === 'done' && target && mine) {
     const targetName = memberById(target.member_id)?.name ?? '상대방'
     return (
       <Modal title="바뀌었습니다" onClose={onClose}>
         <Notice kind="ok">
-          {formatDateKo(myShift.work_date)} 근무가 {targetName} 님과 바뀌었습니다.
+          {formatDateKo(mine.work_date)} 근무가 {targetName} 님과 바뀌었습니다.
           <br />
           모든 사람 화면에 바로 반영됩니다.
         </Notice>
@@ -106,7 +125,7 @@ export default function SwapWizard({ myShift, onClose }: Props) {
           <div className="confirm-row">
             <div className="person"><span className="tag other">상대</span>{targetName}</div>
             <div className="move">
-              <span className="to">{formatDateKo(myShift.work_date)} {myPost?.name}</span>
+              <span className="to">{formatDateKo(mine.work_date)} {myPost?.name}</span>
             </div>
           </div>
         </div>
@@ -128,7 +147,7 @@ export default function SwapWizard({ myShift, onClose }: Props) {
   }
 
   // ─── 마지막 확인 ──────────────────────────────────────────────────────────
-  if (stage === 'confirm' && target) {
+  if (stage === 'confirm' && target && mine) {
     const targetMember = memberById(target.member_id)
     const targetPost = postById(target.post_id)
     return (
@@ -137,7 +156,7 @@ export default function SwapWizard({ myShift, onClose }: Props) {
           <div className="confirm-row">
             <div className="person"><span className="tag me">나</span>{me?.name} 님</div>
             <div className="move">
-              <span className="from">{formatDateKo(myShift.work_date)} {myPost?.name}</span>
+              <span className="from">{formatDateKo(mine.work_date)} {myPost?.name}</span>
               <span className="arrow">→</span>
               <span className="to">{formatDateKo(target.work_date)} {targetPost?.name}</span>
             </div>
@@ -147,7 +166,7 @@ export default function SwapWizard({ myShift, onClose }: Props) {
             <div className="move">
               <span className="from">{formatDateKo(target.work_date)} {targetPost?.name}</span>
               <span className="arrow">→</span>
-              <span className="to">{formatDateKo(myShift.work_date)} {myPost?.name}</span>
+              <span className="to">{formatDateKo(mine.work_date)} {myPost?.name}</span>
             </div>
           </div>
         </div>
@@ -160,7 +179,12 @@ export default function SwapWizard({ myShift, onClose }: Props) {
         {error && <Notice kind="error">{error}</Notice>}
         {busy ? <Spinner /> : (
           <div className="btn-row">
-            <button className="btn ghost" onClick={() => setStage('pick-shift')}>아니요, 그만두기</button>
+            <button
+              className="btn ghost"
+              onClick={() => setStage(myShift ? 'pick-shift' : 'pick-mine')}
+            >
+              아니요, 그만두기
+            </button>
             <button className="btn" onClick={doSwap}>네, 바꾸겠습니다</button>
           </div>
         )}
@@ -198,11 +222,50 @@ export default function SwapWizard({ myShift, onClose }: Props) {
     )
   }
 
+  // ─── 상대부터 고른 경우: 내가 내놓을 근무 고르기 ─────────────────────────
+  if (stage === 'pick-mine' && target) {
+    const targetName = memberById(target.member_id)?.name ?? '상대방'
+    return (
+      <Modal
+        title={`${targetName} 님과 바꾸기`}
+        subtitle={`상대 근무: ${formatDateKo(target.work_date)} ${postById(target.post_id)?.name ?? ''}`}
+        onClose={onClose}
+      >
+        <div className="step-label">1 / 2 단계</div>
+        <div style={{ fontWeight: 700, marginBottom: 12 }}>내 어느 근무를 내놓으시겠습니까?</div>
+
+        {myShifts.length === 0 ? (
+          <Notice kind="warn">내놓을 수 있는 내 근무가 없습니다. (앞으로 남은 근무만 바꿀 수 있습니다)</Notice>
+        ) : (
+          <ul className="list">
+            {myShifts.map((s) => (
+              <li key={s.id}>
+                <button
+                  className="btn secondary"
+                  style={{ justifyContent: 'space-between' }}
+                  onClick={() => { setMine(s); setStage('confirm') }}
+                >
+                  <span style={{ fontSize: '1.05rem' }}>{formatDateKo(s.work_date)}</span>
+                  <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>
+                    {postById(s.post_id)?.name}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <button className="btn ghost" style={{ marginTop: 10 }} onClick={onClose}>그만두기</button>
+      </Modal>
+    )
+  }
+
   // ─── 1단계: 어느 날짜와 바꿀지 ──────────────────────────────────────────
+  if (!mine) return null
   return (
     <Modal
       title="근무 바꾸기"
-      subtitle={`내 근무: ${formatDateKo(myShift.work_date)} ${myPost?.name ?? ''}`}
+      subtitle={`내 근무: ${formatDateKo(mine.work_date)} ${myPost?.name ?? ''}`}
       onClose={onClose}
     >
       <div className="step-label">1 / 3 단계</div>

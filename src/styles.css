@@ -324,6 +324,76 @@ table.grid td.changed { color: var(--ok); font-weight: 800; }
 table.grid td.closed { background: #e8eaee; color: var(--ink-soft); }
 table.grid td.clickable { cursor: pointer; }
 
+/* ─── 내 근무 달력 ───────────────────────────────────────────────────────── */
+
+.cal-head, .cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.cal-head {
+  margin-bottom: 6px;
+  font-size: .9rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.cal-head .sun { color: var(--sun); }
+.cal-head .sat { color: var(--sat); }
+
+.cal-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 66px;
+  padding: 6px 2px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  cursor: default;
+}
+.cal-cell.blank { border: none; background: none; }
+.cal-cell:disabled { opacity: 1; }   /* 근무 없는 날도 흐리게 보이지 않도록 */
+
+.cal-cell .d { font-size: .95rem; font-weight: 800; }
+.cal-cell .d.sun { color: var(--sun); }
+.cal-cell .d.sat { color: var(--sat); }
+
+.cal-cell .p {
+  font-size: .78rem;
+  font-weight: 800;
+  line-height: 1.15;
+  word-break: keep-all;
+}
+
+/* 내 근무가 있는 날 */
+.cal-cell.has { background: #fff3cd; border-color: #e0be51; cursor: pointer; }
+.cal-cell.has:active { transform: translateY(1px); }
+.cal-cell.has.changed .p { color: var(--ok); }
+
+.cal-cell.today { border-color: var(--brand); border-width: 3px; }
+.cal-cell.past { opacity: .45; }
+
+/* 그 날 안내 문구가 있으면 오른쪽 위에 점 */
+.cal-cell .dot {
+  position: absolute;
+  top: 4px; right: 5px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+@media (min-width: 640px) {
+  .cal-head, .cal-grid { gap: 6px; }
+  .cal-head { font-size: 1.05rem; }
+  .cal-cell { min-height: 88px; padding: 8px 4px; }
+  .cal-cell .d { font-size: 1.15rem; }
+  .cal-cell .p { font-size: 1rem; }
+}
+
 /* ─── 목록 ───────────────────────────────────────────────────────────────── */
 
 .list { list-style: none; margin: 0; padding: 0; }
