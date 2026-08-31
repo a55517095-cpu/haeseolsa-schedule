@@ -65,10 +65,10 @@ export default function FullTable() {
 
           <div className="help" style={{ marginBottom: 10 }}>
             노란색은 내 근무, <span style={{ color: 'var(--ok)', fontWeight: 800 }}>초록 글씨</span>는 변경된 근무입니다.
-            표는 옆으로 밀어서 볼 수 있습니다.
+            <span className="only-narrow"> 표는 옆으로 밀어서 볼 수 있습니다.</span>
           </div>
 
-          <div className="table-scroll">
+          <div className="table-scroll wide">
             <table className="grid">
               <thead>
                 <tr>

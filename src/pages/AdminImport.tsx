@@ -148,7 +148,7 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
         )}
         {error && <Notice kind="error">{error}</Notice>}
 
-        <div className="table-scroll">
+        <div className="table-scroll wide">
           <table className="grid review">
             <thead>
               <tr>
