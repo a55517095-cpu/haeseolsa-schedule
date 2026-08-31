@@ -374,7 +374,10 @@ table.grid td.clickable { cursor: pointer; }
 .cal-cell.has:active { transform: translateY(1px); }
 .cal-cell.has.changed .p { color: var(--ok); }
 
-.cal-cell.today { border-color: var(--brand); border-width: 3px; }
+/* 오늘은 배경색까지 바꿔 한눈에 찾게 한다.
+   (.has 와 같은 자리수의 선택자라 뒤에 와야 배경이 먹는다) */
+.cal-cell.today { background: #d6e2ff; border-color: var(--brand); border-width: 3px; }
+.cal-cell.today.has { background: #ffe08a; }
 .cal-cell.past { opacity: .45; }
 
 /* 그 날 안내 문구가 있으면 오른쪽 위에 점 */

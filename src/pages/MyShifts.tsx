@@ -86,7 +86,7 @@ export default function MyShifts() {
       ) : (
         <>
           <div className="help" style={{ marginBottom: 10 }}>
-            노란 칸이 내 근무입니다. 앞으로 남은 근무 <b>{upcomingCount}일</b>.
+            노란 칸이 내 근무, 파란 칸이 오늘입니다. 앞으로 남은 근무 <b>{upcomingCount}일</b>.
             칸을 누르면 근무를 바꿀 수 있습니다.
           </div>
 
