@@ -454,7 +454,7 @@ table.grid td.clickable { cursor: pointer; }
 /* 컴퓨터의 넓은 화면에서는 세 칸을 그대로 두고 이름만 키운다.
    (PIN 화면은 손가락 기준 크기가 이미 맞으므로 이름 고르는 화면에만 적용) */
 @media (min-width: 640px) {
-  .login-wrap.names { max-width: 780px; }
+  .login-wrap.names { max-width: min(1000px, 96vw); }
   .login-wrap.names .login-title { margin: 12px 0 18px; }
   .login-wrap.names .login-title .app-name { font-size: 2.1rem; }
   .login-wrap.names .login-title .sub { font-size: 1.2rem; }
@@ -463,7 +463,7 @@ table.grid td.clickable { cursor: pointer; }
 }
 
 @media (min-width: 1024px) {
-  .login-wrap.names { max-width: min(1240px, 94vw); }
+  .login-wrap.names { max-width: min(1700px, 96vw); }
   .login-wrap.names .login-title { margin: 10px 0 16px; }
   .login-wrap.names .login-title .app-name { font-size: 2.5rem; }
   .login-wrap.names .login-title .sub { font-size: 1.35rem; }
