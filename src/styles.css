@@ -161,6 +161,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn.danger-outline { background: #fff; color: var(--danger); border-color: var(--danger); }
 .btn.small { min-height: 46px; font-size: .92rem; padding: 8px 14px; width: auto; }
 
+/* 무엇을 할지 고르는 큰 버튼 - 제목 아래에 설명 한 줄이 붙는다 */
+.btn.big-choice {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  padding: 14px 16px;
+  min-height: 76px;
+}
+.btn.big-choice .t { font-size: 1.1rem; font-weight: 800; }
+.btn.big-choice .s { font-size: .85rem; font-weight: 600; color: var(--ink-soft); line-height: 1.35; }
+
 .btn-row { display: flex; gap: 10px; }
 .btn-row .btn { flex: 1; }
 
@@ -253,12 +265,27 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--brand-soft)
 
 /* ─── 전체 근무표 (표 보기) ──────────────────────────────────────────────── */
 
+/*
+ * 표는 가로·세로 모두 표 안에서 스크롤한다.
+ * 페이지째로 세로 스크롤하면 맨 윗줄(근무지 이름)이 위로 밀려 사라지기 때문에,
+ * 높이를 화면에 맞춰 묶어두고 그 안에서만 굴린다. 그래야 sticky 가 먹는다.
+ */
 .table-scroll {
-  overflow-x: auto;
+  overflow: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   border: 2px solid var(--line-strong);
   border-radius: var(--radius);
   background: #fff;
+}
+
+/* 화면이 너무 납작하면 표를 묶어봐야 볼 것이 없으므로, 넉넉할 때만 묶는다.
+   (묶지 않은 화면은 예전처럼 페이지째 스크롤된다) */
+@media (min-height: 560px) {
+  .table-scroll {
+    max-height: calc(100vh - 290px);
+    max-height: calc(100dvh - 290px);
+  }
 }
 
 /*
@@ -267,14 +294,16 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--brand-soft)
  * (다른 화면은 읽기 좋은 폭 그대로 둔다)
  */
 @media (min-width: 900px) {
-  .table-scroll.wide {
+  .table-scroll.wide, .grid-wrap.wide {
     --tw: min(1180px, calc(100vw - 32px));
     width: var(--tw);
     margin-left: calc((100% - var(--tw)) / 2);
   }
-  .table-scroll.wide table.grid { font-size: 1rem; }
+  .table-scroll.wide table.grid, .grid-wrap.wide table.grid { font-size: 1rem; }
   .table-scroll.wide table.grid th,
-  .table-scroll.wide table.grid td { padding: 10px 8px; }
+  .table-scroll.wide table.grid td,
+  .grid-wrap.wide table.grid th,
+  .grid-wrap.wide table.grid td { padding: 10px 8px; }
   .only-narrow { display: none; }
 }
 
@@ -298,12 +327,16 @@ table.grid th, table.grid td {
   white-space: nowrap;
 }
 
+/* 근무지 이름 줄은 세로로 굴려도 맨 위에 붙어 있는다.
+   border-collapse 인 표에서는 스크롤할 때 테두리가 같이 밀려 사라지므로
+   테두리 대신 안쪽 그림자로 밑줄을 그린다. */
 table.grid thead th {
   position: sticky;
   top: 0;
   background: #eef1f6;
   font-weight: 800;
   z-index: 2;
+  box-shadow: inset 0 -2px 0 var(--line-strong);
 }
 
 table.grid td.date-cell, table.grid th.date-cell {
@@ -314,7 +347,10 @@ table.grid td.date-cell, table.grid th.date-cell {
   z-index: 1;
   min-width: 76px;
 }
-table.grid thead th.date-cell { z-index: 3; }
+table.grid thead th.date-cell {
+  z-index: 3;
+  box-shadow: inset -2px 0 0 var(--line-strong), inset 0 -2px 0 var(--line-strong);
+}
 
 table.grid tr.is-today td { background: var(--brand-soft); }
 table.grid tr.is-today td.date-cell { background: #d6e2ff; }
@@ -323,6 +359,73 @@ table.grid tr.is-today td.mine { background: #ffe8a3; }
 table.grid td.changed { color: var(--ok); font-weight: 800; }
 table.grid td.closed { background: #e8eaee; color: var(--ink-soft); }
 table.grid td.clickable { cursor: pointer; }
+
+/*
+ * 전체 근무표는 근무지 이름 줄과 본문을 두 개의 표로 나눠 그린다.
+ * 본문은 옆으로 밀리는 상자 안에 있어서, 같은 상자 안의 이름 줄은 페이지를 내리면 같이 사라진다.
+ * 그래서 이름 줄만 상자 밖에 두고 상단바 바로 아래에 붙인 뒤,
+ * 본문을 옆으로 밀면 이름 줄도 같은 만큼 밀어준다. (두 표는 같은 칸 폭을 쓴다)
+ */
+.grid-wrap {
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.grid-wrap .grid-head-shell {
+  position: sticky;
+  top: var(--topbar-h, 0px);
+  z-index: 5;
+}
+/* 넓은 화면에서는 표가 상단바보다 넓어서, 상단바 양옆으로 표 줄이 비친다.
+   이름 줄 위를 바탕색 띠로 가린다. (휴대폰에서는 상단바 뒤에 숨는다) */
+.grid-wrap .grid-head-shell::before {
+  content: '';
+  position: absolute;
+  left: -2px; right: -2px;
+  bottom: 100%;
+  height: var(--topbar-h, 0px);
+  background: var(--bg);
+}
+.grid-wrap .grid-head {
+  overflow: hidden;
+  background: #eef1f6;
+  border-radius: calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0;
+  box-shadow: 0 2px 0 var(--line-strong), 0 4px 8px rgba(0, 0, 0, .08);
+}
+.grid-wrap .grid-body {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 0 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px);
+}
+.grid-wrap table.grid { table-layout: fixed; }
+.grid-wrap .grid-head th { white-space: normal; word-break: break-all; line-height: 1.25; }
+.grid-wrap .grid-body td { overflow: hidden; text-overflow: ellipsis; }
+
+/* 최초 근무표에서 이후에 바뀐 칸 */
+table.grid td.later,
+.later-sample {
+  text-decoration: underline 2px var(--warn);
+  text-underline-offset: 4px;
+}
+
+/* 근무 변경 알림창의 한 줄 */
+.change-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 6px 0;
+  font-weight: 700;
+}
+.change-line .tag {
+  font-size: .78rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.change-line.got .tag { background: var(--ok-soft); color: var(--ok); border: 1px solid var(--ok); }
+.change-line.lost .tag { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger); }
+.change-line .who { color: var(--ink-soft); font-weight: 600; font-size: .9rem; }
 
 /* ─── 내 근무 달력 ───────────────────────────────────────────────────────── */
 
@@ -373,6 +476,10 @@ table.grid td.clickable { cursor: pointer; }
 .cal-cell.has { background: #fff3cd; border-color: #e0be51; cursor: pointer; }
 .cal-cell.has:active { transform: translateY(1px); }
 .cal-cell.has.changed .p { color: var(--ok); }
+
+/* 내 근무는 없지만 다른 분 근무를 대신 맡을 수 있는 날 */
+.cal-cell.free { cursor: pointer; }
+.cal-cell.free:active { background: var(--brand-soft); transform: translateY(1px); }
 
 /* 오늘은 배경색까지 바꿔 한눈에 찾게 한다.
    (.has 와 같은 자리수의 선택자라 뒤에 와야 배경이 먹는다) */

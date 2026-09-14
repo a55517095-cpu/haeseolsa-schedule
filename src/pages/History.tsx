@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Empty, Notice, Spinner } from '../components/ui'
 import { friendlyError, revertChange } from '../lib/api'
+import { canRevert } from '../lib/history'
 import { formatDateKo, formatWhen } from '../lib/date'
 import type { ChangeLog } from '../lib/types'
 
@@ -10,6 +11,7 @@ type Entry = { key: string; logs: ChangeLog[]; at: string }
 
 const ACTION_LABEL: Record<ChangeLog['action'], string> = {
   swap: '근무 맞교대',
+  handover: '근무 넘김',
   assign: '담당자 지정',
   clear: '담당자 비움',
   closed: '휴무 변경',
@@ -81,10 +83,7 @@ export default function History() {
             const involvesMe = entry.logs.some(
               (l) => l.before_member_id === me?.id || l.after_member_id === me?.id,
             )
-            const canUndo =
-              !reverted &&
-              first.action !== 'import' &&
-              (me?.role === 'admin' || first.actor_id === me?.id)
+            const canUndo = !reverted && first.action !== 'import' && canRevert(logs, first, me)
 
             return (
               <li key={entry.key} className={`${reverted ? 'reverted' : ''} ${involvesMe ? 'mine' : ''}`}>

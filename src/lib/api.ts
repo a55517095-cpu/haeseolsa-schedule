@@ -72,11 +72,47 @@ export async function fetchChangeLogs(limit = 100): Promise<ChangeLog[]> {
   return data ?? []
 }
 
+/**
+ * 다른 사람이 내 근무를 바꾼 이력 중 since 이후의 것 (오래된 순).
+ * 내가 직접 한 변경과 근무표 등록은 뺀다.
+ */
+export async function fetchChangesForMe(memberId: string, since: string): Promise<ChangeLog[]> {
+  const { data, error } = await supabase
+    .from('change_logs').select('*')
+    .or(`before_member_id.eq.${memberId},after_member_id.eq.${memberId}`)
+    .neq('actor_id', memberId)
+    .neq('action', 'import')
+    .gt('created_at', since)
+    .order('created_at', { ascending: true })
+    .limit(60)
+  if (error) throw error
+  return data ?? []
+}
+
 // ─── 쓰기 (모두 데이터베이스 함수를 통한다) ──────────────────────────────────
+
+/** 근무 변경 알림을 until 시각까지 확인했다고 적는다 */
+export async function markChangesSeen(until: string): Promise<void> {
+  const { error } = await supabase.rpc('mark_changes_seen', { p_until: until })
+  if (error) throw error
+}
 
 /** 근무 교대 - 두 칸을 한 번에 맞바꾼다 */
 export async function swapShifts(shiftA: string, shiftB: string): Promise<string> {
   const { data, error } = await supabase.rpc('swap_shifts', { p_shift_a: shiftA, p_shift_b: shiftB })
+  if (error) throw error
+  return data as string
+}
+
+/**
+ * 근무 넘기기 - 그 날 근무가 없는 사람에게 근무를 넘긴다.
+ * memberId 가 나 자신이면 남의 근무를 내가 대신 맡는 것이 된다.
+ * 되돌리기에 쓸 이력 id 를 돌려준다.
+ */
+export async function handoverShift(shiftId: string, memberId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('handover_shift', {
+    p_shift: shiftId, p_member: memberId,
+  })
   if (error) throw error
   return data as string
 }

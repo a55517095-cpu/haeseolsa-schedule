@@ -54,6 +54,14 @@ create table if not exists public.shifts (
   unique (schedule_id, work_date, post_id)
 );
 
+-- 근무표를 등록한 순간의 모습 (최초 근무표 보기)
+alter table public.shifts add column if not exists orig_member_id uuid
+  references public.members(id) on delete set null;
+alter table public.shifts add column if not exists orig_closed boolean;
+
+-- 다른 사람이 내 근무를 바꾼 알림을 어디까지 확인했는지
+alter table public.members add column if not exists notice_seen_at timestamptz;
+
 create index if not exists shifts_member_date_idx on public.shifts (member_id, work_date);
 create index if not exists shifts_schedule_date_idx on public.shifts (schedule_id, work_date);
 
@@ -71,7 +79,7 @@ create table if not exists public.change_logs (
   id                 uuid primary key default gen_random_uuid(),
   schedule_id        uuid references public.schedules(id) on delete cascade,
   swap_group_id      uuid,        -- 교대 한 건은 두 줄이 같은 값을 가진다
-  action             text not null check (action in ('swap','assign','clear','closed','import','revert')),
+  action             text not null check (action in ('swap','handover','assign','clear','closed','import','revert')),
   shift_id           uuid references public.shifts(id) on delete set null,
   work_date          date,
   post_name          text,
@@ -299,6 +307,74 @@ begin
      case when p_closed then '휴무로 지정' else '휴무 해제' end);
 end $fn$;
 
+-- --- 6-2. 근무 넘기기 ------------------------------------------------------
+-- 맞바꿀 근무가 없을 때, 그 날 비어 있는 사람에게 근무를 넘긴다.
+-- p_member 가 나 자신이면 "남의 근무를 내가 대신 맡는다"가 된다.
+
+create or replace function public.handover_shift(p_shift uuid, p_member uuid)
+returns uuid
+language plpgsql security definer set search_path = public as $fn$
+declare
+  s public.shifts%rowtype;
+  s_post text; from_name text; to_name text;
+  to_active boolean;
+  me_id uuid := public.current_member_id();
+  me_name text := public.current_member_name();
+  log_id uuid;
+begin
+  if me_id is null then raise exception '로그인이 필요합니다.'; end if;
+  if p_member is null then raise exception '근무를 맡을 사람을 골라주세요.'; end if;
+
+  -- 다른 사람이 같은 칸을 동시에 건드리지 못하게 잠근다
+  select * into s from public.shifts where id = p_shift for update;
+
+  if s.id is null then raise exception '근무 정보를 찾을 수 없습니다.'; end if;
+  if s.is_closed then raise exception '휴무는 넘길 수 없습니다.'; end if;
+  if s.member_id is null then
+    raise exception '담당자가 비어 있는 근무입니다. 관리자에게 문의하세요.';
+  end if;
+  if s.member_id = p_member then raise exception '이미 그 사람의 근무입니다.'; end if;
+
+  select name, active into to_name, to_active from public.members where id = p_member;
+  if to_name is null then raise exception '해설사를 찾을 수 없습니다.'; end if;
+  if not to_active then
+    raise exception '쉬고 있는 해설사에게는 근무를 넘길 수 없습니다.';
+  end if;
+
+  -- 내 근무를 남에게 넘기거나, 남의 근무를 내가 받는 것만 허용한다
+  if not public.is_admin() and me_id not in (s.member_id, p_member) then
+    raise exception '본인이 포함된 근무만 바꿀 수 있습니다.';
+  end if;
+
+  -- 받는 사람이 그 날 이미 다른 곳에 서 있으면 거절한다
+  if exists (
+    select 1 from public.shifts x
+     where x.work_date = s.work_date and x.member_id = p_member and x.id <> s.id
+  ) then
+    raise exception '%님은 %월 %일에 이미 다른 근무가 있습니다.',
+      to_name, extract(month from s.work_date)::int, extract(day from s.work_date)::int;
+  end if;
+
+  select name into s_post from public.posts where id = s.post_id;
+  select name into from_name from public.members where id = s.member_id;
+
+  update public.shifts
+     set member_id = p_member, changed = true, updated_at = now()
+   where id = s.id;
+
+  insert into public.change_logs
+    (schedule_id, action, shift_id, work_date, post_name,
+     before_member_id, before_member_name, after_member_id, after_member_name,
+     actor_id, actor_name, detail)
+  values
+    (s.schedule_id, 'handover', s.id, s.work_date, s_post,
+     s.member_id, from_name, p_member, to_name, me_id, me_name,
+     format('%s 님의 근무를 %s 님이 맡음', from_name, to_name))
+  returning id into log_id;
+
+  return log_id;
+end $fn$;
+
 -- --- 7. 되돌리기 ------------------------------------------------------------
 -- 교대(swap)는 두 줄이 한 쌍이므로 짝까지 함께 되돌린다.
 
@@ -319,9 +395,18 @@ begin
   if lg.action = 'revert' then raise exception '되돌리기 기록은 다시 되돌릴 수 없습니다.'; end if;
   if lg.action = 'import' then raise exception '근무표 등록은 되돌릴 수 없습니다. 근무표를 다시 등록하세요.'; end if;
 
-  -- 되돌릴 수 있는 사람: 관리자, 또는 그 변경을 한 본인
-  if not public.is_admin() and lg.actor_id is distinct from me_id then
-    raise exception '본인이 한 변경만 되돌릴 수 있습니다. 관리자에게 문의하세요.';
+  -- 되돌릴 수 있는 사람: 관리자, 그 변경을 한 본인,
+  -- 또는 그 변경에서 근무를 주거나 받은 사람
+  if not public.is_admin()
+     and lg.actor_id is distinct from me_id
+     and not exists (
+       select 1 from public.change_logs c
+        where ((lg.swap_group_id is not null and c.swap_group_id = lg.swap_group_id)
+            or (lg.swap_group_id is null and c.id = lg.id))
+          and me_id in (c.before_member_id, c.after_member_id)
+     )
+  then
+    raise exception '본인이 포함된 변경만 되돌릴 수 있습니다. 관리자에게 문의하세요.';
   end if;
 
   -- 한 쌍(또는 단독)의 모든 줄을 되돌린다
@@ -406,13 +491,16 @@ begin
         end if;
       end if;
 
-      insert into public.shifts (schedule_id, work_date, post_id, member_id, is_closed, changed)
-      values (sched_id, d, v_post_id, v_member_id, v_closed, false)
+      insert into public.shifts
+        (schedule_id, work_date, post_id, member_id, is_closed, changed, orig_member_id, orig_closed)
+      values (sched_id, d, v_post_id, v_member_id, v_closed, false, v_member_id, v_closed)
       on conflict (schedule_id, work_date, post_id)
-        do update set member_id  = excluded.member_id,
-                      is_closed  = excluded.is_closed,
-                      changed    = false,
-                      updated_at = now();
+        do update set member_id      = excluded.member_id,
+                      is_closed      = excluded.is_closed,
+                      changed        = false,
+                      orig_member_id = excluded.orig_member_id,
+                      orig_closed    = excluded.orig_closed,
+                      updated_at     = now();
       cnt := cnt + 1;
     end loop;
   end loop;
@@ -423,6 +511,18 @@ begin
 
   return sched_id;
 end $fn$;
+
+-- --- 8-2. 근무 변경 알림 확인 ----------------------------------------------
+-- 알림창에서 [확인] 을 누르면 그 시각까지의 알림은 다시 띄우지 않는다
+
+create or replace function public.mark_changes_seen(p_until timestamptz)
+returns void
+language sql security definer set search_path = public as $fn$
+  update public.members
+     set notice_seen_at = greatest(coalesce(notice_seen_at, '-infinity'::timestamptz),
+                                   least(p_until, now()))
+   where auth_user_id = auth.uid()
+$fn$;
 
 -- --- 9. 실시간 반영 ---------------------------------------------------------
 do $blk$

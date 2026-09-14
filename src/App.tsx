@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useApp } from './state/AppContext'
 import { Notice, Spinner } from './components/ui'
 import ChangePinModal from './components/ChangePinModal'
+import ChangeNotice from './components/ChangeNotice'
 import Login from './pages/Login'
 import MyShifts from './pages/MyShifts'
 import FullTable from './pages/FullTable'
@@ -30,6 +31,21 @@ export default function App() {
     needsPinChange, dismissPinPrompt, showToast,
   } = useApp()
   const [tab, setTab] = useState<Tab>('my')
+  const topbarRef = useRef<HTMLElement>(null)
+  const hasTopbar = !!(ready && session && me)
+
+  // 전체 근무표의 근무지 이름 줄이 상단바 바로 아래에 붙도록 상단바 높이를 알려준다.
+  // (글자 크기·아이폰 노치에 따라 높이가 달라진다)
+  useEffect(() => {
+    const el = topbarRef.current
+    if (!el) return
+    const apply = () =>
+      document.documentElement.style.setProperty('--topbar-h', `${el.offsetHeight}px`)
+    apply()
+    const observer = new ResizeObserver(apply)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasTopbar])
 
   if (!ready) return <div className="app"><Spinner /></div>
   if (!session) return <div className="app"><Login /></div>
@@ -65,7 +81,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
+      <header className="topbar" ref={topbarRef}>
         <h1>{TITLES[tab]}</h1>
         <span className="who">{me.name} 님</span>
       </header>
@@ -89,6 +105,9 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      {/* 비밀번호 안내가 먼저, 그 다음에 근무 변경 알림 (창이 겹치지 않게) */}
+      {!needsPinChange && <ChangeNotice key={me.id} me={me} />}
 
       {needsPinChange && (
         <ChangePinModal

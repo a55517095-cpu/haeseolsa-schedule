@@ -15,6 +15,8 @@ export type Member = {
   group_label: string | null
   weekend_only: boolean
   active: boolean
+  /** 근무 변경 알림을 여기까지 확인했다 (마이그레이션 전에는 없음) */
+  notice_seen_at?: string | null
 }
 
 /** 로그인 전에 볼 수 있는 최소한의 정보 */
@@ -44,9 +46,13 @@ export type Shift = {
   changed: boolean
   note: string | null
   updated_at: string
+  /** 근무표를 등록한 순간의 담당자·휴무 (마이그레이션 전에는 없음) */
+  orig_member_id?: string | null
+  orig_closed?: boolean | null
 }
 
-export type ChangeAction = 'swap' | 'assign' | 'clear' | 'closed' | 'import' | 'revert'
+export type ChangeAction =
+  | 'swap' | 'handover' | 'assign' | 'clear' | 'closed' | 'import' | 'revert'
 
 export type ChangeLog = {
   id: string
