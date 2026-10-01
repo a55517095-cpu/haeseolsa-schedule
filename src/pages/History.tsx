@@ -21,7 +21,10 @@ const ACTION_LABEL: Record<ChangeLog['action'], string> = {
 
 export default function History() {
   const { me, logs, loading, refresh, showToast } = useApp()
-  const [onlyMine, setOnlyMine] = useState(false)
+  const isAdmin = me?.role === 'admin'
+  // 전체 이력은 관리자만 본다. 해설사는 늘 내 것만.
+  const [adminOnlyMine, setAdminOnlyMine] = useState(false)
+  const onlyMine = !isAdmin || adminOnlyMine
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,13 +65,17 @@ export default function History() {
 
   return (
     <>
-      <div className="tabs">
-        <button aria-selected={!onlyMine} onClick={() => setOnlyMine(false)}>전체</button>
-        <button aria-selected={onlyMine} onClick={() => setOnlyMine(true)}>내 것만</button>
-      </div>
+      {isAdmin && (
+        <div className="tabs">
+          <button aria-selected={!onlyMine} onClick={() => setAdminOnlyMine(false)}>전체</button>
+          <button aria-selected={onlyMine} onClick={() => setAdminOnlyMine(true)}>내 것만</button>
+        </div>
+      )}
 
       <div className="help" style={{ marginBottom: 14 }}>
-        누가 언제 무엇을 바꿨는지 모두 남습니다. 잘못된 변경은 [되돌리기]로 원래대로 돌릴 수 있습니다.
+        {isAdmin
+          ? '누가 언제 무엇을 바꿨는지 모두 남습니다. 잘못된 변경은 [되돌리기]로 원래대로 돌릴 수 있습니다.'
+          : '내 근무가 바뀐 내용만 보입니다. 잘못된 변경은 [되돌리기]로 원래대로 돌릴 수 있습니다.'}
       </div>
 
       {error && <Notice kind="error">{error}</Notice>}
