@@ -401,6 +401,125 @@ table.grid td.clickable { cursor: pointer; }
 .grid-wrap .grid-head th { white-space: normal; word-break: break-all; line-height: 1.25; }
 .grid-wrap .grid-body td { overflow: hidden; text-overflow: ellipsis; }
 
+/* ─── 가로로 보기 (휴대폰) ─────────────────────────────────────────────── */
+
+.rotate-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  margin-bottom: 12px;
+  border: 2px solid var(--brand);
+  border-radius: var(--radius);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 800;
+  font-size: .95rem;
+  cursor: pointer;
+}
+.rotate-btn svg { width: 22px; height: 22px; flex: none; }
+/* 넓은 화면은 이미 표가 한눈에 보인다 */
+@media (min-width: 900px) { .rotate-btn { display: none; } }
+
+/*
+ * 표만 화면 가득 펼친다. 근무지가 한 줄에 다 들어가도록 칸 폭은 화면 폭을 나눠 쓰고,
+ * 글씨는 화면 폭에 맞춰 줄인다(cqw). 날짜는 위아래로 넘긴다.
+ */
+.wide-view {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+/* 화면을 가로로 못 돌린 경우(아이폰 등) 창을 시계 방향으로 눕혀 그린다.
+   휴대폰을 옆으로 들면 똑바로 보인다. */
+@media (orientation: portrait) {
+  .wide-view {
+    inset: auto;
+    top: 0;
+    left: 0;
+    width: 100vh;
+    width: 100dvh;
+    height: 100vw;
+    transform-origin: top left;
+    transform: rotate(90deg) translateY(-100%);
+  }
+}
+
+.wide-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px max(10px, env(safe-area-inset-right)) 6px max(14px, env(safe-area-inset-left));
+  background: var(--brand);
+  color: #fff;
+}
+.wide-bar b { flex: 1; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wide-seg { display: flex; padding: 2px; border-radius: 10px; background: rgba(255, 255, 255, .18); }
+.wide-seg button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font-weight: 800;
+  font-size: .8rem;
+  cursor: pointer;
+}
+.wide-seg button[aria-pressed='true'] { background: #fff; color: var(--brand); }
+.wide-close {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--brand);
+  font-weight: 800;
+  font-size: .85rem;
+  cursor: pointer;
+}
+
+.wide-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  container-type: inline-size;
+}
+.wide-view table.grid {
+  table-layout: fixed;
+  width: 100%;
+  font-size: 12px;
+  font-size: clamp(11px, 1.6cqw, 17px);
+}
+.wide-view table.grid col.wide-date-col { width: 11%; }
+.wide-view table.grid th,
+.wide-view table.grid td {
+  padding: .35em 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wide-view table.grid th {
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+  font-size: .92em;
+}
+.wide-view table.grid td.date-cell,
+.wide-view table.grid th.date-cell { min-width: 0; }
+
+/* 가로 보기 안에서 뜬 창은 가로 보기 높이에 맞춘다 */
+.wide-view .modal { max-height: 88%; }
+
 /* 최초 근무표에서 이후에 바뀐 칸 */
 table.grid td.later,
 .later-sample {
