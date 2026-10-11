@@ -377,14 +377,17 @@ table.grid td.clickable { cursor: pointer; }
   z-index: 5;
 }
 /* 넓은 화면에서는 표가 상단바보다 넓어서, 상단바 양옆으로 표 줄이 비친다.
-   이름 줄 위를 바탕색 띠로 가린다. (휴대폰에서는 상단바 뒤에 숨는다) */
-.grid-wrap .grid-head-shell::before {
-  content: '';
-  position: absolute;
-  left: -2px; right: -2px;
-  bottom: 100%;
-  height: var(--topbar-h, 0px);
-  background: var(--bg);
+   이름 줄 위를 바탕색 띠로 가린다. 휴대폰에서는 필요 없고,
+   오히려 표 바로 위의 [가로로 보기] 버튼을 덮으므로 넓은 화면에서만 깐다. */
+@media (min-width: 900px) {
+  .grid-wrap .grid-head-shell::before {
+    content: '';
+    position: absolute;
+    left: -2px; right: -2px;
+    bottom: 100%;
+    height: var(--topbar-h, 0px);
+    background: var(--bg);
+  }
 }
 .grid-wrap .grid-head {
   overflow: hidden;
