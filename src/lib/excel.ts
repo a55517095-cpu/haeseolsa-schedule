@@ -45,7 +45,11 @@ export async function downloadTemplate(
 
 export type ParsedCell = { post: string; raw: string; closed: boolean }
 export type ParsedRow = { day: number; cells: ParsedCell[] }
-export type ParseResult = { rows: ParsedRow[]; postColumns: string[]; warnings: string[] }
+export type ParseResult = {
+  rows: ParsedRow[]; postColumns: string[]; warnings: string[]
+  /** 파일 이름·시트 이름에서 읽은 달 (못 읽으면 null) */
+  fileMonth: number | null
+}
 
 /** 시트 이름·파일 이름에서 "9월" 같은 표기를 찾아 달을 알아낸다 */
 function monthFromText(text: string): number | null {
@@ -167,6 +171,7 @@ export async function parseScheduleWorkbook(
     rows: rows.filter((r) => r.day <= lastDay).sort((a, b) => a.day - b.day),
     postColumns: [...postColumnMap.values(), ...missing],
     warnings,
+    fileMonth,
   }
 }
 

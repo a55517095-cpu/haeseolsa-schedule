@@ -47,6 +47,17 @@ export async function fetchScheduleForMonth(year: number, month: number): Promis
   return data
 }
 
+/** 그 근무표에 등록 뒤 생긴 근무 변경(교대·넘기기·관리자 수정) 수. 되돌린 것은 빼고 센다 */
+export async function countScheduleChanges(scheduleId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('change_logs').select('id', { count: 'exact', head: true })
+    .eq('schedule_id', scheduleId)
+    .not('action', 'in', '(import,revert)')
+    .eq('reverted', false)
+  if (error) throw error
+  return count ?? 0
+}
+
 export async function fetchShifts(scheduleId: string | null): Promise<Shift[]> {
   if (!scheduleId) return []
   const { data, error } = await supabase

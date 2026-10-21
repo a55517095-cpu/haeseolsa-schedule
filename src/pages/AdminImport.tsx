@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
-import { MonthPicker, Notice, Spinner } from '../components/ui'
-import { friendlyError, importSchedule } from '../lib/api'
+import { Modal, MonthPicker, Notice, Spinner } from '../components/ui'
+import { countScheduleChanges, fetchScheduleForMonth, friendlyError, importSchedule } from '../lib/api'
 import { downloadTemplate, parseScheduleWorkbook } from '../lib/excel'
 import { matchName } from '../lib/match'
 import { WEEKDAY_KO, daysInMonth, weekdayOf } from '../lib/date'
@@ -21,6 +21,8 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
   const [memo, setMemo] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [fileMonth, setFileMonth] = useState<number | null>(null)
+  const [overwrite, setOverwrite] = useState<{ updatedAt: string; changes: number | null } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const postNames = useMemo(
@@ -32,7 +34,9 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
     [members],
   )
 
-  const reset = () => { setDraft(null); setWarnings([]); setError(null) }
+  const reset = () => {
+    setDraft(null); setWarnings([]); setError(null); setFileMonth(null); setOverwrite(null)
+  }
 
   const cellFrom = (post: string, raw: string): DraftCell => {
     const m = matchName(raw, roster)
@@ -58,6 +62,7 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
         }),
       })))
       setWarnings(parsed.warnings)
+      setFileMonth(parsed.fileMonth)
     } catch (e) {
       setError(friendlyError(e))
     } finally {
@@ -73,10 +78,13 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
       cells: postNames.map((p) => ({ post: p, name: '', closed: false, flag: 'ok' as Flag })),
     })))
     setWarnings([])
+    setFileMonth(null)
     setError(null)
   }
 
   // ─── 저장 ────────────────────────────────────────────────────────────────
+  // 같은 달 근무표가 이미 있으면 바로 덮어쓰지 않고 경고 팝업으로 한 번 더 묻는다.
+  // (10월을 골라 둔 채 11월 파일을 올려 10월 근무표가 통째로 바뀐 일이 있었다)
   const save = async () => {
     if (!draft) return
     const unresolved = draft.reduce(
@@ -86,8 +94,31 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
       setError(`이름을 알 수 없는 칸이 ${unresolved}개 있습니다. 빨간 칸을 눌러 사람을 골라주시거나 [비움]으로 두세요.`)
       return
     }
-    if (!confirm(`${year}년 ${month}월 근무표를 등록합니다.\n이미 등록된 같은 달 근무표가 있으면 새 내용으로 덮어씁니다.\n계속할까요?`)) return
 
+    setBusy('이미 등록된 근무표가 있는지 확인하는 중입니다...'); setError(null)
+    let existing: Awaited<ReturnType<typeof fetchScheduleForMonth>>
+    let changes: number | null = null
+    try {
+      existing = await fetchScheduleForMonth(year, month)
+      if (existing) changes = await countScheduleChanges(existing.id).catch(() => null)
+    } catch (e) {
+      setError(friendlyError(e))
+      setBusy(null)
+      return
+    }
+    setBusy(null)
+
+    if (existing) {
+      setOverwrite({ updatedAt: existing.updated_at, changes })
+      return
+    }
+    if (!confirm(`${year}년 ${month}월 근무표를 새로 등록합니다.\n계속할까요?`)) return
+    await doSave()
+  }
+
+  const doSave = async () => {
+    if (!draft) return
+    setOverwrite(null)
     setBusy('등록하는 중입니다...'); setError(null)
     try {
       const rows: ImportRow[] = draft.map((r) => ({
@@ -197,6 +228,39 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
           <button className="btn ghost" onClick={reset}>처음으로</button>
           <button className="btn" onClick={save}>이대로 등록하기</button>
         </div>
+
+        {overwrite && (
+          <Modal
+            title={`${month}월 근무표를 덮어쓸까요?`}
+            subtitle={`${year}년 ${month}월 근무표가 이미 등록되어 있습니다.`}
+            onClose={() => setOverwrite(null)}
+          >
+            {fileMonth !== null && fileMonth !== month && (
+              <Notice kind="error">
+                올리신 파일은 <b>{fileMonth}월</b> 근무표로 보입니다.
+                지금 고른 달은 <b>{month}월</b>입니다. 달을 잘못 고르지 않았는지 꼭 확인하세요.
+              </Notice>
+            )}
+            <Notice kind="warn">
+              덮어쓰면 지금 {month}월 근무표의 모든 칸이 새 내용으로 바뀝니다.
+              {overwrite.changes !== null && overwrite.changes > 0 && (
+                <> 그동안 있었던 <b>교대·넘기기 {overwrite.changes}건</b>도 사라집니다.</>
+              )}
+              {' '}앱에서 되돌릴 수 없습니다.
+            </Notice>
+            <div className="help" style={{ marginBottom: 14 }}>
+              지금 근무표 마지막 수정: {new Date(overwrite.updatedAt).toLocaleString('ko-KR', {
+                month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+              })}
+            </div>
+            <div className="btn-row">
+              <button className="btn ghost" onClick={() => setOverwrite(null)}>취소</button>
+              <button className="btn danger" onClick={() => void doSave()}>
+                {month}월 근무표 덮어쓰기
+              </button>
+            </div>
+          </Modal>
+        )}
       </>
     )
   }
