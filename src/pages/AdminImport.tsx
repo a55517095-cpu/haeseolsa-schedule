@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Modal, MonthPicker, Notice, Spinner } from '../components/ui'
 import { countScheduleChanges, fetchScheduleForMonth, friendlyError, importSchedule } from '../lib/api'
-import { downloadTemplate, parseScheduleWorkbook } from '../lib/excel'
+import { downloadTemplate, parseScheduleWorkbook, type ParseResult } from '../lib/excel'
 import { matchName } from '../lib/match'
 import { WEEKDAY_KO, daysInMonth, weekdayOf } from '../lib/date'
 import type { ImportRow } from '../lib/types'
@@ -11,6 +11,20 @@ type Flag = 'ok' | 'guess' | 'unknown'
 type DraftCell = { post: string; name: string; closed: boolean; flag: Flag; raw?: string }
 type DraftRow = { day: number; cells: DraftCell[] }
 type Mode = 'excel' | 'manual'
+
+/**
+ * 같은 달 근무표가 이미 있을 때 띄우는 덮어쓰기 경고.
+ * - stage 'file': 엑셀 파일을 고른 직후 (검토 화면으로 넘어가기 전)
+ * - stage 'save': 직접 입력으로 만든 표를 등록하려 할 때
+ * (10월을 골라 둔 채 11월 파일을 올려 10월 근무표가 통째로 바뀐 일이 있었다)
+ */
+type Overwrite = {
+  stage: 'file' | 'save'
+  updatedAt: string
+  changes: number | null
+  fileMonth: number | null
+  parsed?: ParseResult
+}
 
 export default function AdminImport({ onBack }: { onBack: () => void }) {
   const { posts, members, year, month, setMonth, refresh, showToast } = useApp()
@@ -21,8 +35,9 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
   const [memo, setMemo] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [fileMonth, setFileMonth] = useState<number | null>(null)
-  const [overwrite, setOverwrite] = useState<{ updatedAt: string; changes: number | null } | null>(null)
+  const [overwrite, setOverwrite] = useState<Overwrite | null>(null)
+  /** 덮어쓰기 경고를 이미 보고 계속하기로 했는지 */
+  const [overwriteOk, setOverwriteOk] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const postNames = useMemo(
@@ -35,7 +50,7 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
   )
 
   const reset = () => {
-    setDraft(null); setWarnings([]); setError(null); setFileMonth(null); setOverwrite(null)
+    setDraft(null); setWarnings([]); setError(null); setOverwrite(null); setOverwriteOk(false)
   }
 
   const cellFrom = (post: string, raw: string): DraftCell => {
@@ -49,20 +64,36 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
     }
   }
 
+  /** 서버에서 그 달 근무표가 이미 있는지 확인한다. 없으면 null */
+  const findExisting = async (): Promise<{ updatedAt: string; changes: number | null } | null> => {
+    const existing = await fetchScheduleForMonth(year, month)
+    if (!existing) return null
+    const changes = await countScheduleChanges(existing.id).catch(() => null)
+    return { updatedAt: existing.updated_at, changes }
+  }
+
+  const applyParsed = (parsed: ParseResult) => {
+    setDraft(parsed.rows.map((r) => ({
+      day: r.day,
+      cells: postNames.map((p) => {
+        const found = r.cells.find((c) => c.post === p)
+        return cellFrom(p, found?.raw ?? '')
+      }),
+    })))
+    setWarnings(parsed.warnings)
+  }
+
   // ─── 엑셀 업로드 ──────────────────────────────────────────────────────────
   const onExcel = async (file: File) => {
     setBusy('엑셀을 읽는 중입니다...'); setError(null)
     try {
       const parsed = await parseScheduleWorkbook(file, postNames, year, month)
-      setDraft(parsed.rows.map((r) => ({
-        day: r.day,
-        cells: postNames.map((p) => {
-          const found = r.cells.find((c) => c.post === p)
-          return cellFrom(p, found?.raw ?? '')
-        }),
-      })))
-      setWarnings(parsed.warnings)
-      setFileMonth(parsed.fileMonth)
+      const existing = await findExisting()
+      if (existing) {
+        setOverwrite({ stage: 'file', ...existing, fileMonth: parsed.fileMonth, parsed })
+      } else {
+        applyParsed(parsed)
+      }
     } catch (e) {
       setError(friendlyError(e))
     } finally {
@@ -78,13 +109,23 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
       cells: postNames.map((p) => ({ post: p, name: '', closed: false, flag: 'ok' as Flag })),
     })))
     setWarnings([])
-    setFileMonth(null)
+    setOverwriteOk(false)
     setError(null)
   }
 
+  // ─── 덮어쓰기 경고에서 [계속] ─────────────────────────────────────────────
+  const confirmOverwrite = () => {
+    if (!overwrite) return
+    if (overwrite.stage === 'file' && overwrite.parsed) {
+      applyParsed(overwrite.parsed)
+      setOverwriteOk(true)
+      setOverwrite(null)
+    } else {
+      void doSave()
+    }
+  }
+
   // ─── 저장 ────────────────────────────────────────────────────────────────
-  // 같은 달 근무표가 이미 있으면 바로 덮어쓰지 않고 경고 팝업으로 한 번 더 묻는다.
-  // (10월을 골라 둔 채 11월 파일을 올려 10월 근무표가 통째로 바뀐 일이 있었다)
   const save = async () => {
     if (!draft) return
     const unresolved = draft.reduce(
@@ -95,12 +136,17 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
       return
     }
 
+    // 파일을 고를 때 이미 덮어쓰기 경고를 보고 계속하기로 했다
+    if (overwriteOk) {
+      if (!confirm(`이미 등록된 ${year}년 ${month}월 근무표를 지금 내용으로 덮어씁니다.\n계속할까요?`)) return
+      await doSave()
+      return
+    }
+
     setBusy('이미 등록된 근무표가 있는지 확인하는 중입니다...'); setError(null)
-    let existing: Awaited<ReturnType<typeof fetchScheduleForMonth>>
-    let changes: number | null = null
+    let existing: Awaited<ReturnType<typeof findExisting>>
     try {
-      existing = await fetchScheduleForMonth(year, month)
-      if (existing) changes = await countScheduleChanges(existing.id).catch(() => null)
+      existing = await findExisting()
     } catch (e) {
       setError(friendlyError(e))
       setBusy(null)
@@ -109,7 +155,7 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
     setBusy(null)
 
     if (existing) {
-      setOverwrite({ updatedAt: existing.updated_at, changes })
+      setOverwrite({ stage: 'save', ...existing, fileMonth: null })
       return
     }
     if (!confirm(`${year}년 ${month}월 근무표를 새로 등록합니다.\n계속할까요?`)) return
@@ -150,6 +196,43 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
   }
 
   // ─── 화면 ────────────────────────────────────────────────────────────────
+
+  // ─── 덮어쓰기 경고 팝업 (첫 화면·검토 화면 공용) ─────────────────────────
+  const overwriteModal = overwrite && (
+    <Modal
+      title={`${month}월 근무표를 덮어쓸까요?`}
+      subtitle={`${year}년 ${month}월 근무표가 이미 등록되어 있습니다.`}
+      onClose={() => setOverwrite(null)}
+    >
+      {overwrite.fileMonth !== null && overwrite.fileMonth !== month && (
+        <Notice kind="error">
+          올리신 파일은 <b>{overwrite.fileMonth}월</b> 근무표로 보입니다.
+          지금 고른 달은 <b>{month}월</b>입니다. 달을 잘못 고르지 않았는지 꼭 확인하세요.
+        </Notice>
+      )}
+      <Notice kind="warn">
+        덮어쓰면 지금 {month}월 근무표의 모든 칸이 새 내용으로 바뀝니다.
+        {overwrite.changes !== null && overwrite.changes > 0 && (
+          <> 그동안 있었던 <b>교대·넘기기 {overwrite.changes}건</b>도 사라집니다.</>
+        )}
+        {' '}앱에서 되돌릴 수 없습니다.
+      </Notice>
+      <div className="help" style={{ marginBottom: 14 }}>
+        지금 근무표 마지막 수정: {new Date(overwrite.updatedAt).toLocaleString('ko-KR', {
+          month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+        })}
+        {overwrite.stage === 'file' && (
+          <><br />계속하면 검토 화면으로 넘어갑니다. 실제로 바뀌는 것은 [이대로 등록하기]를 누를 때입니다.</>
+        )}
+      </div>
+      <div className="btn-row">
+        <button className="btn ghost" onClick={() => setOverwrite(null)}>취소</button>
+        <button className="btn danger" onClick={confirmOverwrite}>
+          {overwrite.stage === 'file' ? '덮어쓰기로 하고 계속' : `${month}월 근무표 덮어쓰기`}
+        </button>
+      </div>
+    </Modal>
+  )
 
   if (busy) return (
     <>
@@ -229,38 +312,7 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
           <button className="btn" onClick={save}>이대로 등록하기</button>
         </div>
 
-        {overwrite && (
-          <Modal
-            title={`${month}월 근무표를 덮어쓸까요?`}
-            subtitle={`${year}년 ${month}월 근무표가 이미 등록되어 있습니다.`}
-            onClose={() => setOverwrite(null)}
-          >
-            {fileMonth !== null && fileMonth !== month && (
-              <Notice kind="error">
-                올리신 파일은 <b>{fileMonth}월</b> 근무표로 보입니다.
-                지금 고른 달은 <b>{month}월</b>입니다. 달을 잘못 고르지 않았는지 꼭 확인하세요.
-              </Notice>
-            )}
-            <Notice kind="warn">
-              덮어쓰면 지금 {month}월 근무표의 모든 칸이 새 내용으로 바뀝니다.
-              {overwrite.changes !== null && overwrite.changes > 0 && (
-                <> 그동안 있었던 <b>교대·넘기기 {overwrite.changes}건</b>도 사라집니다.</>
-              )}
-              {' '}앱에서 되돌릴 수 없습니다.
-            </Notice>
-            <div className="help" style={{ marginBottom: 14 }}>
-              지금 근무표 마지막 수정: {new Date(overwrite.updatedAt).toLocaleString('ko-KR', {
-                month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
-              })}
-            </div>
-            <div className="btn-row">
-              <button className="btn ghost" onClick={() => setOverwrite(null)}>취소</button>
-              <button className="btn danger" onClick={() => void doSave()}>
-                {month}월 근무표 덮어쓰기
-              </button>
-            </div>
-          </Modal>
-        )}
+        {overwriteModal}
       </>
     )
   }
@@ -312,6 +364,7 @@ export default function AdminImport({ onBack }: { onBack: () => void }) {
           <button className="btn" onClick={startManual}>빈 표 만들기</button>
         </div>
       )}
+      {overwriteModal}
     </>
   )
 }
