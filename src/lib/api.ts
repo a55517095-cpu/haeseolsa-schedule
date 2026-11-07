@@ -85,7 +85,7 @@ export async function fetchChangeLogs(limit = 100): Promise<ChangeLog[]> {
 
 /**
  * 내가 볼 수 있는 변경 이력 메모.
- * 내 메모 + 남이 "모두" 또는 "관련된 사람" 으로 공개한 메모만 데이터베이스가 내준다.
+ * 내 메모 + 교대 상대가 나에게 공개한 메모만 데이터베이스가 내준다 (관리자는 전부).
  */
 export async function fetchVisibleMemos(): Promise<ChangeMemo[]> {
   const { data, error } = await supabase

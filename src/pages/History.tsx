@@ -97,8 +97,8 @@ export default function History() {
       <div className="help" style={{ marginBottom: 14 }}>
         {isAdmin
           ? '누가 언제 무엇을 바꿨는지 모두 남습니다. 잘못된 변경은 [되돌리기]로 원래대로 돌릴 수 있습니다.'
-          : '내 근무가 바뀐 내용만 보입니다. 잘못된 변경은 [되돌리기]로 원래대로 돌릴 수 있습니다.'}
-        {memos && ' 카드마다 누구와 왜 바꿨는지 메모를 남길 수 있고, 나만 볼지 함께 볼지 고를 수 있습니다.'}
+          : '내 근무가 바뀐 내용만 보이고, 다른 해설사에게는 보이지 않습니다. 잘못된 변경은 [되돌리기]로 원래대로 돌릴 수 있습니다.'}
+        {memos && ' 카드마다 누구와 왜 바꿨는지 메모를 남길 수 있고, 교대 상대에게도 보일지 고를 수 있습니다.'}
       </div>
 
       {error && <Notice kind="error">{error}</Notice>}
@@ -187,14 +187,12 @@ const MEMO_MAX = 100
 
 const VIS_LABEL: Record<MemoVisibility, string> = {
   private: '나만',
-  involved: '관련된 사람',
-  all: '모두',
+  involved: '교대 상대도',
 }
 
 const VIS_HELP: Record<MemoVisibility, string> = {
-  private: '이 메모는 나만 볼 수 있습니다.',
-  involved: '이 변경으로 근무를 주고받은 사람과 변경한 사람이 볼 수 있습니다.',
-  all: '이 이력을 보는 모든 사람(관리자 포함)이 볼 수 있습니다.',
+  private: '나와 관리자만 볼 수 있습니다.',
+  involved: '이 변경으로 근무를 주고받은 상대와 관리자도 볼 수 있습니다.',
 }
 
 /** 이력 카드 아래 내 한 줄 메모. 공개 범위를 고를 수 있다 */

@@ -75,8 +75,8 @@ export type ChangeLog = {
   created_at: string
 }
 
-/** 메모 공개 범위: 나만 / 그 변경에 관련된 사람 / 모두 */
-export type MemoVisibility = 'private' | 'involved' | 'all'
+/** 메모 공개 범위: 나만 / 교대 상대도. 관리자는 언제나 본다 */
+export type MemoVisibility = 'private' | 'involved'
 
 /** 변경 이력 카드에 남긴 한 줄 메모 */
 export type ChangeMemo = {

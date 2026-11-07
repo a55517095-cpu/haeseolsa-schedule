@@ -148,6 +148,15 @@ begin
   end loop;
 end $blk$;
 
+-- 변경 이력은 근무자끼리 보지 않는다: 해설사는 자기가 바꿨거나 자기 근무가 바뀐 이력만
+drop policy if exists change_logs_read on public.change_logs;
+create policy change_logs_read on public.change_logs
+  for select to authenticated
+  using (
+    public.is_admin()
+    or public.current_member_id() in (actor_id, before_member_id, after_member_id)
+  );
+
 -- 본인 전화번호는 스스로 고칠 수 있게 (권한 열은 못 건드림)
 drop policy if exists members_update_self on public.members;
 create policy members_update_self on public.members
@@ -525,8 +534,8 @@ language sql security definer set search_path = public as $fn$
 $fn$;
 
 -- --- 8-3. 변경 이력 한 줄 메모 -----------------------------------------
--- 메모마다 공개 범위를 고른다.
---   private: 나만 / involved: 그 변경에 관련된 사람 / all: 로그인한 모든 사람
+-- 메모마다 공개 범위를 고른다. 관리자는 언제나 본다.
+--   private: 나만 / involved: 교대 상대도 (그 변경에 관련된 사람)
 
 create table if not exists public.change_memos (
   id         uuid primary key default gen_random_uuid(),
@@ -535,7 +544,7 @@ create table if not exists public.change_memos (
   log_key    uuid not null,
   body       text not null check (char_length(body) between 1 and 100),
   visibility text not null default 'private'
-             constraint change_memos_visibility_check check (visibility in ('private', 'involved', 'all')),
+             constraint change_memos_visibility_check check (visibility in ('private', 'involved')),
   updated_at timestamptz not null default now(),
   unique (member_id, log_key)
 );
@@ -553,14 +562,14 @@ language sql stable security definer set search_path = public as $fn$
   )
 $fn$;
 
--- 읽기: 내 메모 + 모두 공개 + (관련된 사람 공개이고 내가 관련된 경우)
+-- 읽기: 내 메모 + 관리자 + (교대 상대 공개이고 내가 관련된 경우)
 drop policy if exists change_memos_read_own on public.change_memos;
 drop policy if exists change_memos_read on public.change_memos;
 create policy change_memos_read on public.change_memos
   for select to authenticated
   using (
     member_id = public.current_member_id()
-    or visibility = 'all'
+    or public.is_admin()
     or (visibility = 'involved' and public.involved_in_change(log_key))
   );
 
@@ -580,7 +589,7 @@ begin
   if me_id is null then
     raise exception '로그인이 필요합니다.';
   end if;
-  if v_vis not in ('private', 'involved', 'all') then
+  if v_vis not in ('private', 'involved') then
     raise exception '공개 범위가 올바르지 않습니다.';
   end if;
 
