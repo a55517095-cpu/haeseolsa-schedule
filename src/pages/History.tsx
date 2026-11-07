@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Empty, Notice, Spinner } from '../components/ui'
-import { friendlyError, revertChange } from '../lib/api'
+import { fetchMyMemos, friendlyError, revertChange, saveChangeMemo } from '../lib/api'
 import { canRevert } from '../lib/history'
 import { formatDateKo, formatWhen } from '../lib/date'
 import type { ChangeLog } from '../lib/types'
@@ -27,6 +27,29 @@ export default function History() {
   const onlyMine = !isAdmin || adminOnlyMine
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // 내가 남긴 한 줄 메모 (이력 카드 key → 메모). null 이면 아직 못 불러왔거나
+  // 데이터베이스에 메모 기능이 설치되지 않은 것이므로 메모 칸을 숨긴다.
+  const [memos, setMemos] = useState<Map<string, string> | null>(null)
+
+  useEffect(() => {
+    if (!me?.id) return
+    let alive = true
+    fetchMyMemos()
+      .then((list) => { if (alive) setMemos(new Map(list.map((m) => [m.log_key, m.body]))) })
+      .catch(() => { if (alive) setMemos(null) })
+    return () => { alive = false }
+  }, [me?.id])
+
+  const saveMemo = async (key: string, body: string) => {
+    const text = body.trim().slice(0, MEMO_MAX)
+    await saveChangeMemo(key, text)
+    setMemos((prev) => {
+      const next = new Map(prev ?? [])
+      if (text) next.set(key, text)
+      else next.delete(key)
+      return next
+    })
+  }
 
   const entries = useMemo<Entry[]>(() => {
     const groups = new Map<string, ChangeLog[]>()
@@ -76,6 +99,7 @@ export default function History() {
         {isAdmin
           ? '누가 언제 무엇을 바꿨는지 모두 남습니다. 잘못된 변경은 [되돌리기]로 원래대로 돌릴 수 있습니다.'
           : '내 근무가 바뀐 내용만 보입니다. 잘못된 변경은 [되돌리기]로 원래대로 돌릴 수 있습니다.'}
+        {memos && ' 카드마다 누구와 왜 바꿨는지 메모를 남겨 두면 나만 볼 수 있습니다.'}
       </div>
 
       {error && <Notice kind="error">{error}</Notice>}
@@ -120,6 +144,13 @@ export default function History() {
                   {reverted && first.reverted_by_name && ` · ${first.reverted_by_name} 님이 되돌림`}
                 </div>
 
+                {memos && (
+                  <MemoLine
+                    body={memos.get(entry.key) ?? ''}
+                    onSave={(body) => saveMemo(entry.key, body)}
+                  />
+                )}
+
                 {canUndo && (
                   <button
                     className="btn danger-outline small"
@@ -136,5 +167,77 @@ export default function History() {
         </ul>
       )}
     </>
+  )
+}
+
+const MEMO_MAX = 100
+
+/** 이력 카드 아래 한 줄 메모. 나만 볼 수 있다 */
+function MemoLine({ body, onSave }: { body: string; onSave: (body: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(body)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const open = () => { setDraft(body); setError(null); setEditing(true) }
+
+  const save = async () => {
+    setSaving(true); setError(null)
+    try {
+      await onSave(draft)
+      setEditing(false)
+    } catch (e) {
+      setError(friendlyError(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!editing) {
+    return body ? (
+      <button type="button" className="memo-view" onClick={open} title="메모 고치기">
+        <span aria-hidden>📝</span> {body}
+      </button>
+    ) : (
+      <button type="button" className="memo-add" onClick={open}>+ 메모 남기기 (나만 보임)</button>
+    )
+  }
+
+  return (
+    <div className="memo-edit">
+      <input
+        type="text"
+        value={draft}
+        maxLength={MEMO_MAX}
+        autoFocus
+        placeholder="예) 김OO 님 병원 일정으로 바꿔 줌"
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.nativeEvent.isComposing) void save()
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        aria-label="한 줄 메모"
+      />
+      {error && <div className="memo-error">{error}</div>}
+      <div className="memo-actions">
+        <button type="button" className="btn small" onClick={() => void save()} disabled={saving}>
+          {saving ? '저장 중...' : '저장'}
+        </button>
+        <button type="button" className="btn ghost small" onClick={() => setEditing(false)} disabled={saving}>
+          취소
+        </button>
+        {body && (
+          <button
+            type="button"
+            className="btn ghost small"
+            onClick={() => { setDraft(''); void onSave('').then(() => setEditing(false), (e) => setError(friendlyError(e))) }}
+            disabled={saving}
+          >
+            지우기
+          </button>
+        )}
+      </div>
+      <div className="log-sub" style={{ marginTop: 6 }}>이 메모는 나만 볼 수 있습니다.</div>
+    </div>
   )
 }

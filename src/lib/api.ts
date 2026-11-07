@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type {
-  ChangeLog, DayNote, ImportRow, Member, Post, PublicMember, Schedule, Shift,
+  ChangeLog, ChangeMemo, DayNote, ImportRow, Member, Post, PublicMember, Schedule, Shift,
 } from './types'
 
 /** Supabase 에서 온 오류를 사람이 읽을 수 있는 한국어 한 줄로 */
@@ -83,6 +83,13 @@ export async function fetchChangeLogs(limit = 100): Promise<ChangeLog[]> {
   return data ?? []
 }
 
+/** 내가 남긴 변경 이력 메모 (보안 규칙상 남의 메모는 애초에 읽히지 않는다) */
+export async function fetchMyMemos(): Promise<ChangeMemo[]> {
+  const { data, error } = await supabase.from('change_memos').select('log_key, body')
+  if (error) throw error
+  return data ?? []
+}
+
 /**
  * 다른 사람이 내 근무를 바꾼 이력 중 since 이후의 것 (오래된 순).
  * 내가 직접 한 변경과 근무표 등록은 뺀다.
@@ -105,6 +112,12 @@ export async function fetchChangesForMe(memberId: string, since: string): Promis
 /** 근무 변경 알림을 until 시각까지 확인했다고 적는다 */
 export async function markChangesSeen(until: string): Promise<void> {
   const { error } = await supabase.rpc('mark_changes_seen', { p_until: until })
+  if (error) throw error
+}
+
+/** 변경 이력 카드에 한 줄 메모 저장. 빈 글이면 지운다 */
+export async function saveChangeMemo(logKey: string, body: string): Promise<void> {
+  const { error } = await supabase.rpc('set_change_memo', { p_log_key: logKey, p_body: body })
   if (error) throw error
 }
 

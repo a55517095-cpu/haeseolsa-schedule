@@ -50,11 +50,12 @@
    - 2026년 9월 근무표에 있던 근무지 10곳·해설사 25명이 등록됩니다.
    - 명단은 나중에 앱의 `[더보기] → [해설사 명단 관리]` 에서 얼마든지 고칠 수 있습니다.
 
-> **이미 쓰고 계신 곳이라면** `schema.sql` 을 다시 실행하는 대신 아래 두 파일을 **순서대로** 실행하시면 됩니다.
-> (둘 다 여러 번 실행해도 안전합니다)
+> **이미 쓰고 계신 곳이라면** `schema.sql` 을 다시 실행하는 대신 아래 파일들을 **순서대로** 실행하시면 됩니다.
+> (모두 여러 번 실행해도 안전합니다)
 >
 > 1. `supabase/migration_handover.sql` — 근무 넘기기 · 되돌리기 권한 확대
 > 2. `supabase/migration_original_notice.sql` — 최초 근무표 보관 · 근무 변경 알림
+> 3. `supabase/migration_change_memo.sql` — 변경 이력 한 줄 메모 (쓴 사람만 보임)
 
 ### 2-2. 첫 관리자 계정 만들기
 
@@ -209,6 +210,7 @@ Vercel/Netlify에 GitHub 저장소를 연결하면 `npm run build` 는 자동으
 supabase/
   schema.sql                     테이블 · 보안규칙 · 교대/넘기기/되돌리기 함수
   migration_handover.sql         (이미 설치한 곳용) 근무 넘기기 추가
+  migration_change_memo.sql      (이미 설치한 곳용) 변경 이력 한 줄 메모
   seed.sql                       근무지 · 해설사 명단 초기 데이터
   functions/manage-user/         계정 생성 · PIN 초기화 (서비스 키 필요)
 src/

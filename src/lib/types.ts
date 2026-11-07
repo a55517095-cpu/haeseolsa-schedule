@@ -75,6 +75,12 @@ export type ChangeLog = {
   created_at: string
 }
 
+/** 변경 이력 카드에 내가 남긴 한 줄 메모 (나만 볼 수 있다) */
+export type ChangeMemo = {
+  log_key: string // 교대는 swap_group_id, 나머지는 change_logs.id
+  body: string
+}
+
 export type DayNote = {
   id: string
   schedule_id: string
