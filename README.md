@@ -56,6 +56,7 @@
 > 1. `supabase/migration_handover.sql` — 근무 넘기기 · 되돌리기 권한 확대
 > 2. `supabase/migration_original_notice.sql` — 최초 근무표 보관 · 근무 변경 알림
 > 3. `supabase/migration_change_memo.sql` — 변경 이력 한 줄 메모 (쓴 사람만 보임)
+> 4. `supabase/migration_memo_visibility.sql` — 메모 공개 범위 (나만 · 관련된 사람 · 모두)
 
 ### 2-2. 첫 관리자 계정 만들기
 
@@ -211,6 +212,7 @@ supabase/
   schema.sql                     테이블 · 보안규칙 · 교대/넘기기/되돌리기 함수
   migration_handover.sql         (이미 설치한 곳용) 근무 넘기기 추가
   migration_change_memo.sql      (이미 설치한 곳용) 변경 이력 한 줄 메모
+  migration_memo_visibility.sql  (이미 설치한 곳용) 메모 공개 범위
   seed.sql                       근무지 · 해설사 명단 초기 데이터
   functions/manage-user/         계정 생성 · PIN 초기화 (서비스 키 필요)
 src/

@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type {
-  ChangeLog, ChangeMemo, DayNote, ImportRow, Member, Post, PublicMember, Schedule, Shift,
+  ChangeLog, ChangeMemo, DayNote, ImportRow, MemoVisibility, Member, Post, PublicMember, Schedule, Shift,
 } from './types'
 
 /** Supabase 에서 온 오류를 사람이 읽을 수 있는 한국어 한 줄로 */
@@ -83,9 +83,14 @@ export async function fetchChangeLogs(limit = 100): Promise<ChangeLog[]> {
   return data ?? []
 }
 
-/** 내가 남긴 변경 이력 메모 (보안 규칙상 남의 메모는 애초에 읽히지 않는다) */
-export async function fetchMyMemos(): Promise<ChangeMemo[]> {
-  const { data, error } = await supabase.from('change_memos').select('log_key, body')
+/**
+ * 내가 볼 수 있는 변경 이력 메모.
+ * 내 메모 + 남이 "모두" 또는 "관련된 사람" 으로 공개한 메모만 데이터베이스가 내준다.
+ */
+export async function fetchVisibleMemos(): Promise<ChangeMemo[]> {
+  const { data, error } = await supabase
+    .from('change_memos').select('member_id, log_key, body, visibility')
+    .order('updated_at')
   if (error) throw error
   return data ?? []
 }
@@ -116,8 +121,12 @@ export async function markChangesSeen(until: string): Promise<void> {
 }
 
 /** 변경 이력 카드에 한 줄 메모 저장. 빈 글이면 지운다 */
-export async function saveChangeMemo(logKey: string, body: string): Promise<void> {
-  const { error } = await supabase.rpc('set_change_memo', { p_log_key: logKey, p_body: body })
+export async function saveChangeMemo(
+  logKey: string, body: string, visibility: MemoVisibility,
+): Promise<void> {
+  const { error } = await supabase.rpc('set_change_memo', {
+    p_log_key: logKey, p_body: body, p_visibility: visibility,
+  })
   if (error) throw error
 }
 
